@@ -1,0 +1,122 @@
+plugins {
+    id 'java'
+    id 'idea'
+    id 'net.neoforged.moddev' version '2.0.141'
+}
+
+version = mod_version
+group = mod_group_id
+base.archivesName = "${mod_id}-${minecraft_version}"
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+repositories {
+    mavenLocal()
+    maven {
+        // Create, Ponder, Flywheel
+        url = 'https://maven.createmod.net'
+    }
+    maven {
+        // Registrate -- moved here from maven.tterrag.com, this is what Create resolves against
+        url = 'https://maven.ithundxr.dev/snapshots'
+    }
+    maven {
+        // JEI, in case Create's metadata pulls it in
+        url = 'https://maven.blamejared.com'
+    }
+    maven {
+        // Optional Create: Factory Controller compatibility (compile-only)
+        url = 'https://www.cursemaven.com'
+        content {
+            includeGroup 'curse.maven'
+        }
+    }
+}
+
+neoForge {
+    version = neo_version
+
+    parchment {
+        minecraftVersion = parchment_minecraft_version
+        mappingsVersion = parchment_version
+    }
+
+    runs {
+        client {
+            client()
+			if (project.hasProperty('mixinAudit')) {
+				systemProperty 'mixin.debug.export', 'true'
+				systemProperty 'mixin.debug.verbose', 'true'
+				systemProperty 'mixin.debug.countInjections', 'true'
+			}
+        }
+        server {
+            server()
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+dependencies {
+    implementation("com.simibubi.create:create-${minecraft_version}:${create_version}") {
+		// 6.0.10's POM incorrectly treats optional compatibility mods as mandatory runtime
+		// dependencies. Declare only Create's real prerequisites below so runClient stays usable.
+		transitive = false
+	}
+	implementation "com.tterrag.registrate:Registrate:MC1.21-1.3.0+67"
+	implementation "net.createmod.ponder:ponder-neoforge:1.0.82+mc1.21.1"
+	compileOnly "dev.engine-room.flywheel:flywheel-neoforge-api-1.21.1:1.0.6"
+	runtimeOnly "dev.engine-room.flywheel:flywheel-neoforge-1.21.1:1.0.6"
+	runtimeOnly "dev.engine-room.vanillin:vanillin-neoforge-1.21.1:1.1.3-41"
+	compileOnly("curse.maven:create-factory-controller-1573767:8520194") {
+		transitive = false
+	}
+	// Keep the development runtime switchable so the same addon jar is tested
+	// both with and without the optional compatibility mod installed.
+	if (!project.hasProperty('withoutFactoryController')) {
+		runtimeOnly("curse.maven:create-factory-controller-1573767:8520194") {
+			transitive = false
+		}
+	}
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    def expandProps = [
+            'mod_id'             : mod_id,
+            'mod_name'           : mod_name,
+            'mod_version'        : mod_version,
+            'mod_authors'        : mod_author,
+            'mod_license'        : mod_license,
+            'mod_description'    : mod_description,
+            'neo_version_range'  : neo_version_range,
+            'create_version_range': create_version_range,
+    ]
+
+    inputs.properties expandProps
+    filesMatching(['META-INF/neoforge.mods.toml']) {
+        expand expandProps
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
+
+java {
+    withSourcesJar()
+}
+
+// Keep the NeoForge metadata declaration and also expose the config through the
+// standard manifest attribute. Some launcher/mod combinations only discover
+// addon mixins through the latter during the early transformation phase.
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes 'MixinConfigs': "${mod_id}.mixins.json"
+    }
+}

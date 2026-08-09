@@ -1,0 +1,240 @@
+package dev.failzockt.factoryrouting.compat.factorycontroller;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.Multimap;
+import com.simibubi.create.content.logistics.BigItemStack;
+import com.simibubi.create.content.logistics.packager.IdentifiedInventory;
+import com.simibubi.create.content.logistics.packager.InventorySummary;
+import com.simibubi.create.content.logistics.packager.PackagerBlockEntity;
+import com.simibubi.create.content.logistics.packager.PackagingRequest;
+import com.simibubi.create.content.logistics.packagerLink.LogisticsManager;
+import com.simibubi.create.content.logistics.stockTicker.PackageOrder;
+import com.simibubi.create.content.logistics.stockTicker.PackageOrderWithCrafts;
+
+import io.github.nbcss.createfactorycontroller.content.GaugeWorkMode;
+import io.github.nbcss.createfactorycontroller.content.block.FactoryControllerBlockEntity;
+import io.github.nbcss.createfactorycontroller.content.component.RecipeSlot;
+import io.github.nbcss.createfactorycontroller.content.component.VirtualComponentPosition;
+import io.github.nbcss.createfactorycontroller.content.component.VirtualGaugeBehaviour;
+import io.github.nbcss.createfactorycontroller.content.component.connection.Connection;
+import io.github.nbcss.createfactorycontroller.content.component.connection.LogisticsConnection;
+import net.minecraft.world.item.ItemStack;
+
+/** Splits Factory Controller's already-validated item order into per-address planning passes. */
+public final class VirtualRoutedDispatch {
+
+	private VirtualRoutedDispatch() {
+	}
+
+	public static Multimap<PackagerBlockEntity, PackagingRequest> plan(VirtualGaugeBehaviour gauge,
+		FactoryControllerBlockEntity controller, UUID network, PackageOrderWithCrafts order,
+		IdentifiedInventory excludedInventory, String defaultAddress) {
+		VirtualPanelRouting routing = VirtualRoutingAccess.get(gauge);
+		if (routing.isEmpty() || controller == null)
+			return LogisticsManager.findPackagersForRequest(network, order, excludedInventory, defaultAddress);
+
+		List<SourceRoute> sources = sourcesFor(gauge, controller, network, routing, defaultAddress);
+		if (sources.isEmpty())
+			return LogisticsManager.findPackagersForRequest(network, order, excludedInventory, defaultAddress);
+		if (sources.stream().anyMatch(source -> source.address().isBlank()))
+			return ArrayListMultimap.create();
+
+		Map<String, List<BigItemStack>> buckets = gauge.mode == GaugeWorkMode.CUSTOM
+			? splitCustom(gauge, order, sources, defaultAddress)
+			: splitMerged(gauge, order, sources, defaultAddress);
+		buckets.entrySet().removeIf(entry -> !hasDemand(entry.getValue()));
+		if (buckets.isEmpty())
+			return LogisticsManager.findPackagersForRequest(network, order, excludedInventory, defaultAddress);
+
+		ArrayListMultimap<PackagerBlockEntity, PackagingRequest> combined = ArrayListMultimap.create();
+		StockLedger ledger = new StockLedger();
+		try {
+			for (Map.Entry<String, List<BigItemStack>> bucket : buckets.entrySet()) {
+				PackageOrderWithCrafts routedOrder = new PackageOrderWithCrafts(
+					new PackageOrder(bucket.getValue()), order.orderedCrafts());
+				Multimap<PackagerBlockEntity, PackagingRequest> plan = LogisticsManager.findPackagersForRequest(
+					network, routedOrder, excludedInventory, bucket.getKey());
+				if (plan.isEmpty())
+					return ArrayListMultimap.create();
+				combined.putAll(plan);
+				ledger.reserve(plan);
+			}
+		} finally {
+			ledger.release();
+		}
+		return combined;
+	}
+
+	private static List<SourceRoute> sourcesFor(VirtualGaugeBehaviour gauge,
+		FactoryControllerBlockEntity controller, UUID network, VirtualPanelRouting routing, String defaultAddress) {
+		List<SourceRoute> sources = new ArrayList<>();
+		for (Map.Entry<VirtualComponentPosition, Connection> entry : gauge.targetedBy().entrySet()) {
+			if (!(entry.getValue() instanceof LogisticsConnection connection))
+				continue;
+			if (!(controller.components.get(entry.getKey()) instanceof VirtualGaugeBehaviour source))
+				continue;
+			if (!network.equals(source.networkId) || source.filter.isEmpty())
+				continue;
+			sources.add(new SourceRoute(entry.getKey(), source, connection.amount(),
+				routing.resolve(entry.getKey(), defaultAddress)));
+		}
+		return sources;
+	}
+
+	private static Map<String, List<BigItemStack>> splitMerged(VirtualGaugeBehaviour gauge,
+		PackageOrderWithCrafts order, List<SourceRoute> sources, String defaultAddress) {
+		Map<SourceRoute, Integer> craftingWeights = craftingWeights(gauge, sources);
+		Map<String, List<BigItemStack>> buckets = new LinkedHashMap<>();
+		for (BigItemStack item : order.stacks()) {
+			if (item.stack.isEmpty() || item.count <= 0) {
+				buckets.computeIfAbsent(defaultAddress, ignored -> new ArrayList<>()).add(copy(item, item.count));
+				continue;
+			}
+
+			Map<String, Integer> weights = new LinkedHashMap<>();
+			for (SourceRoute source : sources) {
+				if (!matches(source.gauge(), item.stack))
+					continue;
+				int weight = gauge.mode == GaugeWorkMode.CRAFTING
+					? craftingWeights.getOrDefault(source, 0) : source.amount();
+				if (weight > 0)
+					weights.merge(source.address(), weight, Integer::sum);
+			}
+			if (weights.isEmpty()) {
+				buckets.computeIfAbsent(defaultAddress, ignored -> new ArrayList<>()).add(copy(item, item.count));
+				continue;
+			}
+
+			int totalWeight = weights.values().stream().mapToInt(Integer::intValue).sum();
+			int remainingCount = item.count;
+			int remainingWeight = totalWeight;
+			int index = 0;
+			for (Map.Entry<String, Integer> route : weights.entrySet()) {
+				int amount = ++index == weights.size()
+					? remainingCount
+					: Math.min(remainingCount, (int) ((long) item.count * route.getValue() / totalWeight));
+				if (amount <= 0 && remainingCount > 0 && route.getValue() == remainingWeight)
+					amount = remainingCount;
+				remainingCount -= amount;
+				remainingWeight -= route.getValue();
+				if (amount > 0)
+					buckets.computeIfAbsent(route.getKey(), ignored -> new ArrayList<>()).add(copy(item, amount));
+			}
+		}
+		return buckets;
+	}
+
+	private static Map<String, List<BigItemStack>> splitCustom(VirtualGaugeBehaviour gauge,
+		PackageOrderWithCrafts order, List<SourceRoute> sources, String defaultAddress) {
+		Map<VirtualComponentPosition, String> addressBySource = new LinkedHashMap<>();
+		sources.forEach(source -> addressBySource.put(source.position(), source.address()));
+		Map<String, List<BigItemStack>> buckets = new LinkedHashMap<>();
+		List<BigItemStack> original = order.stacks();
+
+		for (int i = 0; i < original.size(); i++) {
+			BigItemStack item = original.get(i);
+			if (item.count <= 0)
+				continue;
+			String address = defaultAddress;
+			if (i < gauge.recipeSlots.size()) {
+				RecipeSlot slot = gauge.recipeSlots.get(i);
+				if (!slot.isEmpty())
+					address = addressBySource.getOrDefault(slot.source(), defaultAddress);
+			}
+			List<BigItemStack> target = customBucket(buckets, address, original.size());
+			target.set(i, copy(item, item.count));
+		}
+
+		// Factory Controller appends a zero-count arrangement marker. Every routed package needs it,
+		// while ordinary empty cells remain the pre-filled placeholders at their original indices.
+		for (int i = 0; i < original.size(); i++) {
+			BigItemStack item = original.get(i);
+			if (item.count <= 0 && !item.stack.isEmpty())
+				for (List<BigItemStack> bucket : buckets.values())
+					bucket.set(i, copy(item, item.count));
+		}
+		return buckets;
+	}
+
+	private static List<BigItemStack> customBucket(Map<String, List<BigItemStack>> buckets,
+		String address, int size) {
+		return buckets.computeIfAbsent(address, ignored -> {
+			List<BigItemStack> slots = new ArrayList<>(size);
+			for (int i = 0; i < size; i++)
+				slots.add(new BigItemStack(ItemStack.EMPTY, 0));
+			return slots;
+		});
+	}
+
+	private static Map<SourceRoute, Integer> craftingWeights(VirtualGaugeBehaviour gauge,
+		List<SourceRoute> sources) {
+		Map<SourceRoute, Integer> weights = new LinkedHashMap<>();
+		if (gauge.mode != GaugeWorkMode.CRAFTING)
+			return weights;
+		for (ItemStack cell : gauge.activeCraftingArrangement) {
+			if (cell.isEmpty())
+				continue;
+			for (SourceRoute source : sources)
+				if (matches(source.gauge(), cell)) {
+					weights.merge(source, 1, Integer::sum);
+					break;
+				}
+		}
+		return weights;
+	}
+
+	private static boolean matches(VirtualGaugeBehaviour source, ItemStack requested) {
+		return source.ignoreData
+			? source.filter.is(requested.getItem())
+			: ItemStack.isSameItemSameComponents(source.filter, requested);
+	}
+
+	private static BigItemStack copy(BigItemStack source, int count) {
+		return new BigItemStack(source.stack.isEmpty() ? ItemStack.EMPTY : source.stack.copyWithCount(1), count);
+	}
+
+	private static boolean hasDemand(List<BigItemStack> items) {
+		return items.stream().anyMatch(item -> !item.stack.isEmpty() && item.count > 0);
+	}
+
+	private record SourceRoute(VirtualComponentPosition position, VirtualGaugeBehaviour gauge,
+		int amount, String address) {
+	}
+
+	private static final class StockLedger {
+
+		private record Reservation(InventorySummary summary, ItemStack stack, int count) {
+		}
+
+		private final List<Reservation> reservations = new ArrayList<>();
+
+		void reserve(Multimap<PackagerBlockEntity, PackagingRequest> plan) {
+			for (Map.Entry<PackagerBlockEntity, PackagingRequest> entry : plan.entries()) {
+				PackagingRequest request = entry.getValue();
+				int requested = request.getCount();
+				if (requested <= 0)
+					continue;
+				InventorySummary summary = entry.getKey().getAvailableItems();
+				int reserved = Math.min(summary.getCountOf(request.item()), requested);
+				if (reserved <= 0)
+					continue;
+				summary.add(request.item(), -reserved);
+				reservations.add(new Reservation(summary, request.item(), reserved));
+			}
+		}
+
+		void release() {
+			for (int i = reservations.size() - 1; i >= 0; i--) {
+				Reservation reservation = reservations.get(i);
+				reservation.summary().add(reservation.stack(), reservation.count());
+			}
+			reservations.clear();
+		}
+	}
+}

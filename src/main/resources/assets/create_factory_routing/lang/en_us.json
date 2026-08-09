@@ -1,0 +1,22 @@
+{
+  "gui.create_factory_routing.ingredient_routing": "Ingredient Routing",
+  "gui.create_factory_routing.target_address": "Target address",
+  "gui.create_factory_routing.inherit": "Use default",
+  "gui.create_factory_routing.save": "Save",
+  "gui.create_factory_routing.cancel": "Cancel",
+  "gui.create_factory_routing.unknown_item": "Unknown item",
+  "gui.create_factory_routing.inherited_status": "Currently inherited: %s",
+  "gui.create_factory_routing.override_status": "Override active",
+  "gui.create_factory_routing.route_override": "Target: %s (override)",
+  "gui.create_factory_routing.route_inherited": "Target: %s (inherited)",
+  "gui.create_factory_routing.route_mode_override": "Custom address",
+  "gui.create_factory_routing.route_mode_inherited": "Default address",
+  "gui.create_factory_routing.route_mode_override_short": "Custom",
+  "gui.create_factory_routing.route_mode_inherited_short": "Default",
+  "gui.create_factory_routing.click_to_configure": "Click to configure",
+  "gui.create_factory_routing.routing_overview": "Ingredient Routes",
+  "gui.create_factory_routing.open_routing_overview": "Open routing overview",
+  "gui.create_factory_routing.no_ingredients": "No ingredient links configured",
+  "gui.create_factory_routing.edit": "Edit",
+  "gui.create_factory_routing.back": "Back"
+}

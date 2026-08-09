@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "dev.failzockt.factoryrouting.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "FactoryPanelBehaviourMixin",
+    "compat.FactoryControllerComponentAccessor",
+    "compat.FactoryControllerGaugeMixin"
+  ],
+  "client": [
+    "FactoryPanelScreenMixin",
+    "compat.FactoryControllerScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
