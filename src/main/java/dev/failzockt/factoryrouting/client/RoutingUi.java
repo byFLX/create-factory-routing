@@ -32,7 +32,8 @@ final class RoutingUi {
 		graphics.fill(x + 2, y + 2, x + width - 2, y + 25, HEADER);
 		graphics.fill(x + 2, y + 23, x + width - 2, y + 25, HEADER_DARK);
 		graphics.fill(x + 2, y + 25, x + width - 2, y + 27, ACCENT);
-		graphics.drawString(font, title, x + width / 2 - font.width(title) / 2, y + 9,
+		String label = clipped(font, title.getString(), width - 8);
+		graphics.drawString(font, label, x + width / 2 - font.width(label) / 2, y + 9,
 			0xFF202936, false);
 	}
 

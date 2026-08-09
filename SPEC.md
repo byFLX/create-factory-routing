@@ -131,9 +131,13 @@ view optimistically, but the server remains authoritative.
 
 ## 8. User interface
 
-The routing icon is available from recipe-mode Factory Panel settings. It opens an ingredient route
-overview, from which each ingredient can be edited. Small per-ingredient shortcuts are also shown
-where the native Create layout provides room.
+The routing icon is available from recipe-mode Factory Panel settings. When the screen has enough
+space beside the Recipe Settings panel, it toggles an embedded ingredient list on the left and the
+selected ingredient's address editor on the right. Both panels shrink independently with the
+available side space and GUI scale. Small per-ingredient shortcuts select the matching entry
+directly. The client remembers whether the embedded panels were visible when the recipe screen is
+reopened during the same game session. Resolutions that cannot fit even the narrow side layout retain the compact paged overview
+and editor as a fallback.
 
 Visual states:
 
@@ -144,8 +148,9 @@ Visual states:
 The editor provides **Save**, **Cancel**, and **Use default** actions. It uses a normal text field to
 avoid Create's large suggestion overlay obscuring the surrounding screen.
 
-Create: Factory Controller virtual gauges expose the same overview and editor through optional
-client Mixins.
+Create: Factory Controller virtual gauges expose the same embedded interface and compact fallback
+through optional client Mixins. Per-ingredient routing details remain in the embedded panels; the
+small routing shortcuts do not draw an additional tooltip over Create's native ingredient tooltip.
 
 ## 9. Compatibility strategy
 
@@ -201,10 +206,14 @@ require permission level 2 and apply the same structural validation as network r
 - Mouse wheel and page controls reach every ingredient.
 - Address input accepts keyboard editing without an obstructive suggestion panel.
 - All buttons work in both regular and Factory Controller screens.
+- The main routing icon toggles adaptively sized embedded panels when side space is available.
+- Compact screens remain reachable when the side panels do not fit.
+- A regular gauge ingredient keeps only Create's native foreground tooltip.
 
 ## 12. Current status
 
 The project builds against Create `6.0.10-281`. Regular Factory Panel routing, optional Factory
-Controller routing, persistence, dispatch, synchronization, and the current UI have been exercised
-in-game. Both dependency configurations build successfully. Further UI layout improvements can be
-made without changing the routing data or dispatch contract described above.
+Controller routing, persistence, dispatch, synchronization, and the routing UI have been exercised
+in-game. Both dependency configurations build successfully. The routing interface uses embedded
+side panels where space permits and compact screens at smaller resolutions without changing the
+routing data or dispatch contract described above.

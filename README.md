@@ -21,7 +21,8 @@ without splitting the recipe across several panels.
 - The original Factory Panel address remains the default
 - Atomic availability checks across all ingredients before dispatch
 - Correct stock accounting when several address groups use the same logistics network
-- In-game routing overview and per-ingredient editor
+- Embedded ingredient list and per-ingredient address editor
+- Compact routing fallback for resolutions without enough side space
 - Native compatibility with regular Create Factory Panels
 - Optional compatibility with Create: Factory Controller virtual gauges
 - Persistent, server-authoritative routing data
@@ -30,14 +31,16 @@ without splitting the recipe across several panels.
 ## Using the routing UI
 
 1. Open a Factory Panel in recipe mode.
-2. Select the routing icon next to the normal panel controls.
-3. Choose an ingredient and select **Edit**.
-4. Enter the target address and select **Save**.
+2. Select the routing icon next to the normal panel controls to show the routing side panels.
+3. Choose an ingredient in the list on the left, or use its small **R** shortcut in the recipe grid.
+4. Edit the target address on the right and select **Save**.
 5. Select **Use default** to remove the override and inherit the panel address again.
 
 Gold entries use the panel's default address. Teal entries have a custom address override. The
-same workflow is available for Create: Factory Controller virtual recipe gauges when that mod is
-installed.
+main routing icon toggles both side panels. Their widths adapt to the available space and Minecraft
+GUI scale, and their visible/hidden state is remembered when the recipe screen is reopened during
+the same game session. Only screens that cannot fit even the narrow side layout use the compact paged view. This workflow is also
+available for Create: Factory Controller virtual recipe gauges when that mod is installed.
 
 ## Installation
 

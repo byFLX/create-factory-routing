@@ -16,7 +16,10 @@
   "gui.create_factory_routing.click_to_configure": "Klicken zum Konfigurieren",
   "gui.create_factory_routing.routing_overview": "Zutaten-Routen",
   "gui.create_factory_routing.open_routing_overview": "Routing-Übersicht öffnen",
+  "gui.create_factory_routing.toggle_routing_panels": "Routing-Seitenleisten ein- oder ausblenden",
+  "gui.create_factory_routing.open_compact_routing": "Kompakte Routing-Ansicht öffnen",
   "gui.create_factory_routing.no_ingredients": "Keine Zutaten-Verbindungen vorhanden",
+  "gui.create_factory_routing.select_ingredient": "Zutat auswählen",
   "gui.create_factory_routing.edit": "Ändern",
   "gui.create_factory_routing.back": "Zurück"
 }
