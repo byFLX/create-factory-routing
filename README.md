@@ -11,7 +11,7 @@ across several gauges.
 ## Requirements
 
 - Minecraft 1.21.1
-- NeoForge 21.1.219 or newer
+- NeoForge 21.1.227 or newer
 - Create 6.0.10 — required and tested
 - Create: Factory Controller 1.1.1 — optional and tested
 - Java 21
