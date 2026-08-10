@@ -1,52 +1,57 @@
 # Create: Factory Routing
 
-Per-ingredient package routing for Create's Factory Gauges.
+Create: Factory Routing adds optional delivery-address overrides to the ingredient connections of
+Create Factory Gauge recipes.
 
-Create: Factory Routing adds per-ingredient package addresses to Create's Factory Gauges. Instead of
-sending every ingredient in a recipe to the same address, each ingredient can inherit the gauge's
-default address or use a custom destination. A single recipe gauge can therefore supply several
-machines without splitting the recipe across multiple gauges.
+Normally, every requested ingredient uses the recipe gauge's default address. With this addon, each
+ingredient connection can keep that default or use its own custom address. This allows one recipe
+gauge to distribute ingredient deliveries across multiple destinations without splitting the setup
+across several gauges.
 
-| Requirement | Version |
-|---|---|
-| Minecraft | 1.21.1 |
-| Mod loader | NeoForge 21.1.219 or newer |
-| Create | 6.0.10 or newer |
-| Create: Factory Controller | Optional, 1.1.1 or newer |
-| Java | 21 |
+## Requirements
+
+- Minecraft 1.21.1
+- NeoForge 21.1.219 or newer
+- Create 6.0.10 — required and tested
+- Create: Factory Controller 1.1.1 — optional and tested
+- Java 21
 
 ## Features
 
-- Optional target-address override for every ingredient link
-- The gauge's own address remains the default for every ingredient that has no override
-- Atomic availability checks across all ingredients before dispatch
-- Several addresses on one logistics network are planned in a single pass, so two of them can never
-  be assigned the same stock, whatever inventory sits behind the packager
-- Embedded ingredient list and per-ingredient address editor
-- Compact routing fallback for resolutions without enough side space
-- Native compatibility with regular Create Factory Gauges
-- Optional compatibility with Create: Factory Controller virtual gauges
+- A separate custom delivery address for each ingredient connection
+- Automatic inheritance from the recipe gauge's default address
+- Embedded ingredient list on the left and address editor on the right
+- Compact paged fallback when there is not enough side space
+- Support for regular Create Factory Gauges
+- Optional support for Create: Factory Controller virtual gauges
+- Joint planning of all target addresses on each logistics network within one request cycle
 - Persistent, server-authoritative routing data
+- English and German localization
+- No new blocks or items
 - `/cfr` diagnostic commands for controlled testing
 
-## Using the routing UI
+## How to use
 
 1. Open a Factory Gauge in recipe mode.
-2. Select the routing icon next to the normal panel controls to show the routing side panels.
-3. Choose an ingredient in the list on the left, or use its small **R** shortcut in the recipe grid.
-4. Edit the target address on the right and select **Save**.
-5. Select **Use default** to remove the override and inherit the panel address again.
+2. Select the routing icon to show the routing side panels.
+3. Select an ingredient from the list on the left. Where available, the small **R** shortcut in the
+   recipe grid selects it directly.
+4. Enter the target address in the editor on the right and select **Save**.
+5. Select **Use default** to remove the override and use the recipe gauge's default address again.
 
-Gold entries use the panel's default address. Teal entries have a custom address override. The
-main routing icon toggles both side panels. Their widths adapt to the available space and Minecraft
-GUI scale, and their visible/hidden state is remembered when the recipe screen is reopened during
-the same game session. Only screens that cannot fit even the narrow side layout use the compact paged view. This workflow is also
-available for Create: Factory Controller virtual recipe gauges when that mod is installed.
+Gold entries use the gauge's default address. Teal entries use a custom address. The routing icon
+toggles both side panels, and their visible state is remembered for the current game session. Their
+widths adapt to the available space and GUI scale; only screens too small for the narrow side layout
+fall back to the compact paged view.
+
+The **R** shortcuts are not available in every mode. A regular gauge hides them while a crafting
+arrangement is active, and a Factory Controller gauge draws them in regular mode only. The
+ingredient list remains available in all modes.
 
 ## Installation
 
 Install the built JAR in the `mods` directory of a Minecraft 1.21.1 NeoForge instance containing
-Create 6.0.10 or newer. Create: Factory Controller is optional.
+Create 6.0.10. Create: Factory Controller is optional.
 
 ## Building
 
@@ -79,7 +84,8 @@ Without that property, the development client includes Create: Factory Controlle
 The `/cfr` command is intended for diagnostics and controlled runtime tests. It requires permission
 level 2 and operates in the command source's current dimension.
 
-List the ingredient links of a recipe panel:
+List the ingredient connections of a recipe gauge. The argument names below are the literal command
+parameters, which still use Create's internal `panel` wording:
 
 ```text
 /cfr route list <panel x y z> <panel slot>
@@ -104,10 +110,10 @@ overrides continue through Create's original code path.
 
 Create plans one target address per call and reserves nothing while it plans, so calling it once per
 address would let two addresses select the same physical stock — one of them silently under-delivered
-while the panel already counts the craft as in flight. Routed dispatch therefore plans a whole
+while the gauge already counts the craft as in flight. Routed dispatch therefore plans a whole
 logistics network in a single walk over its links: amounts are allocated first, then the requests
-are built per address in Create's own order, so package grouping and order completion stay
-unchanged. Each address remains an independent order.
+are built per address following Create's own loop order, so that package grouping and order
+completion keep the sequence Create produces. Each address remains an independent order.
 
 Optional Factory Controller integration uses guarded pseudo-Mixins, so the same addon JAR works
 with or without that mod installed. See [SPEC.md](SPEC.md) for the implementation contract and
@@ -119,10 +125,10 @@ Working and in use. Per-ingredient overrides and inheritance, two addresses with
 both trigger paths, sustained operation, persistence, the routing UI, and both regular Factory
 Gauges and Factory Controller virtual gauges have been exercised in game.
 
-Two dispatch cases are correct by construction but have not been reproduced in game yet: the same
-item routed to two different addresses, and a single order large enough to span more than one
-package. Both require a deliberately unusual board, which is also why they are unlikely to occur by
-accident. See *Known gaps* in [SPEC.md](SPEC.md).
+Two dispatch cases have not been reproduced in game yet: the same item routed to two different
+addresses, and a single order large enough to span more than one package. Both are implemented and
+reviewed against Create's own code, but neither has been observed at runtime. Large Factory
+Controller recipes in particular can reach the second case. See *Known gaps* in [SPEC.md](SPEC.md).
 
 ## Credits and licensing
 

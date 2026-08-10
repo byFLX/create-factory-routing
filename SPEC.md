@@ -20,12 +20,16 @@ additive and never replaces Create's own address field.
 |---|---|
 | Minecraft | 1.21.1 |
 | NeoForge | 21.1.219 or newer |
-| Create | 6.0.10 or newer |
-| Create: Factory Controller | Optional, 1.1.1 or newer |
+| Create | 6.0.10 — required and tested |
+| Create: Factory Controller | Optional, 1.1.1 — tested |
 | Java | 21 |
 
-The oldest supported Create artifact and compile target is
-`com.simibubi.create:create-1.21.1:6.0.10-281`.
+The compile target is `com.simibubi.create:create-1.21.1:6.0.10-281`. The published metadata pins
+both dependencies to exactly those versions rather than accepting newer ones: five Mixin classes
+with required injection points when their targets are present, plus the adapted dispatch logic,
+depend on specific method signatures, so a newer Create or Factory Controller has to be tested
+before a range is widened. Factory Controller is pinned as `[1.1.1-neoforge-1.21.1]`, the version
+string it actually reports.
 
 ## 3. Scope
 
@@ -33,7 +37,8 @@ Version 0.1 provides:
 
 - one optional address override per ingredient connection;
 - persistence and server-to-client synchronization;
-- atomic multi-address dispatch;
+- multi-address dispatch that is planned as a whole and abandoned entirely if any part of it cannot
+  be covered;
 - an in-game overview and address editor;
 - a command-based diagnostic fallback;
 - optional Create: Factory Controller integration.
@@ -42,6 +47,10 @@ Tags, NBT matching, priorities, round-robin selection, fallback chains, custom b
 conditions, and delivery-time synchronization are outside the current scope.
 
 ## 4. Create data model
+
+**Terminology.** This document uses *Factory Panel* for Create's internal `FactoryPanel*` classes,
+because that is what they are called in code. The block players see in game is the **Factory Gauge**;
+player-facing texts such as the README and the mod description use that name throughout.
 
 The implementation relies on Create's factory-board types:
 
@@ -151,14 +160,22 @@ data requires it.
 
 ## 7. Networking and validation
 
-Routing changes are server-authoritative. Configuration payloads validate:
+Routing changes are server-authoritative. Configuration payloads are rejected unless all of the
+following hold:
 
-- the target block entity and panel slot;
-- player interaction distance;
-- access to the Create logistics network;
-- the existence of the referenced ingredient connection;
-- non-blank addresses;
-- Create's 25-character address limit.
+- the target block entity and panel slot exist;
+- the player is not a spectator and not in adventure mode;
+- the target position is loaded and within interaction distance;
+- the player may interact with the logistics network of the target panel and of the source panel;
+- the referenced ingredient connection exists on that panel slot.
+
+The address itself is normalized rather than rejected. A blank address is a valid payload and means
+*remove the override*, so the ingredient falls back to the gauge's own address. An address longer
+than Create's 25-character limit is truncated to that length when the payload is decoded, because
+the normalization happens in the `IngredientRoute` constructor.
+
+The `/cfr` command path is stricter: it refuses a blank address, pointing at `route clear` instead,
+and refuses an over-long one rather than silently shortening it.
 
 Accepted changes are persisted and synchronized back to clients. The client may update its local
 view optimistically, but the server remains authoritative.
@@ -200,8 +217,14 @@ Factory Panel request processing.
 ## 10. Diagnostic commands
 
 `/cfr route list` prints the active ingredient connections and their source positions. `/cfr route
-set` and `/cfr route clear` provide controlled configuration without using the client UI. Commands
-require permission level 2 and apply the same structural validation as network requests.
+set` and `/cfr route clear` provide controlled configuration without using the client UI.
+
+Commands require permission level 2, and that is the only player-side gate. They check the same
+structural facts as the network path — the position must be loaded, the block entity must be a
+factory panel, the slot must be active and the referenced ingredient connection must exist — but
+they deliberately skip interaction distance, the spectator and adventure tests, and the logistics
+network permission check. They are also stricter about the address itself: a blank or over-long
+address is refused instead of normalized.
 
 ## 11. Validation checklist
 
@@ -220,7 +243,7 @@ require permission level 2 and apply the same structural validation as network r
 - Removing an override restores inheritance from the panel address.
 - Routing survives world reload and chunk unload.
 
-### Atomicity and stock accounting
+### All-or-nothing planning and stock accounting
 
 - If one ingredient is unavailable, no bucket is dispatched.
 - 64 of one item to address A and 64 to address B, served from two ordinary chests holding 64 each:
@@ -238,25 +261,28 @@ require permission level 2 and apply the same structural validation as network r
 
 ### Known gaps
 
-Two checklist items above have not been reproduced in game yet. Both need a deliberately unusual
-board, which is also why they are unlikely to be hit accidentally.
+Two checklist items above have not been reproduced in game. Both paths are implemented and were
+reviewed line by line against Create's own code, but neither has been observed at runtime, so treat
+them as untested rather than working.
 
-**Same item routed to two addresses.** The allocation phase exists precisely for this case, but it
+**Same item routed to two addresses.** The allocation phase exists precisely for this case. It
 requires two source panels carrying an identical filter, wired to one consumer panel and routed to
 different addresses. Every setup tested so far used distinct items per address, so the buckets were
-disjoint per item and never competed for the same stock. The single pass is correct by construction
-— it never reads a packager's summary twice — but the contention path itself is unproven.
+disjoint per item and never competed for the same stock. The single pass reads each packager's
+summary once, which is what should prevent double assignment, but the contention path itself has
+never run.
 
 **One order spanning more than one package.** A package holds `PackageItem.SLOTS` = 9 slots, and
-`FactoryPanelScreen` clamps each ingredient amount to 1–64 with at most 9 ingredient links, so an
-order of ordinary 64-stacking items can never exceed a single package. Reaching a second package
-requires items with a smaller maximum stack size — ten lava buckets occupy ten slots. Until that is
-run, `packageCounter` continuity across packages of one order, the placement of the order context,
-and the final-link flag are only verified structurally, not observed.
+`FactoryPanelScreen` clamps each ingredient amount to 1–64 across at most 9 ingredient links, so an
+order of ordinary 64-stacking items stays within a single package. A second package needs items with
+a smaller maximum stack size — ten lava buckets occupy ten slots — or a Factory Controller recipe,
+whose amounts are not bound by that clamp. Large controller recipes are therefore not an exotic
+case. Until this is run, `packageCounter` continuity across packages of one order, the placement of
+the order context, and the final-link flag remain unobserved.
 
-Neither gap affects the cases that have been exercised: overrides and inheritance, two addresses in
-one cycle producing one correctly addressed package each, both trigger paths, sustained operation,
-and both gauge types.
+The cases that have been exercised are unaffected: overrides and inheritance, two addresses in one
+cycle producing one correctly addressed package each, both trigger paths, sustained operation, and
+both gauge types.
 
 ### Factory Controller
 

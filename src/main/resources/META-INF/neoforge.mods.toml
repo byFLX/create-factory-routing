@@ -38,6 +38,9 @@ side = "BOTH"
 [[dependencies.${mod_id}]]
 modId = "createfactorycontroller"
 type = "optional"
-versionRange = "[1.1.1,)"
+# Pinned to the exact tested build. The mod reports itself as "1.1.1-neoforge-1.21.1", which the
+# loader orders above plain 1.1.1, so "[1.1.1]" would exclude it -- and an installed but
+# out-of-range optional dependency aborts loading rather than being skipped.
+versionRange = "[1.1.1-neoforge-1.21.1]"
 ordering = "AFTER"
 side = "BOTH"
