@@ -20,7 +20,8 @@ without splitting the recipe across several panels.
 - Optional target-address override for every ingredient link
 - The original Factory Panel address remains the default
 - Atomic availability checks across all ingredients before dispatch
-- Correct stock accounting when several address groups use the same logistics network
+- Several addresses on one logistics network are planned in a single pass, so two of them can never
+  be assigned the same stock, whatever inventory sits behind the packager
 - Embedded ingredient list and per-ingredient address editor
 - Compact routing fallback for resolutions without enough side space
 - Native compatibility with regular Create Factory Panels
@@ -100,9 +101,27 @@ The addon stores routing overrides as NeoForge data attachments instead of addin
 to Create classes. A small Mixin delegates panels with active overrides to the routed dispatch
 implementation; panels without overrides continue through Create's original code path.
 
+Create plans one target address per call and reserves nothing while it plans, so calling it once per
+address would let two addresses select the same physical stock — one of them silently under-delivered
+while the panel already counts the craft as in flight. Routed dispatch therefore plans a whole
+logistics network in a single walk over its links: amounts are allocated first, then the requests
+are built per address in Create's own order, so package grouping and order completion stay
+unchanged. Each address remains an independent order.
+
 Optional Factory Controller integration uses guarded pseudo-Mixins, so the same addon JAR works
 with or without that mod installed. See [SPEC.md](SPEC.md) for the implementation contract and
 validation checklist.
+
+## Status
+
+Working and in use. Per-ingredient overrides and inheritance, two addresses within one craft cycle,
+both trigger paths, sustained operation, persistence, the routing UI, and both regular Factory
+Panels and Factory Controller virtual gauges have been exercised in game.
+
+Two dispatch cases are correct by construction but have not been reproduced in game yet: the same
+item routed to two different addresses, and a single order large enough to span more than one
+package. Both require a deliberately unusual board, which is also why they are unlikely to occur by
+accident. See *Known gaps* in [SPEC.md](SPEC.md).
 
 ## License
 
