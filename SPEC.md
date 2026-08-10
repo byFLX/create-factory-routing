@@ -236,6 +236,28 @@ require permission level 2 and apply the same structural validation as network r
   each order exactly once.
 - Every case above on a regular Factory Panel and through a Factory Controller virtual gauge.
 
+### Known gaps
+
+Two checklist items above have not been reproduced in game yet. Both need a deliberately unusual
+board, which is also why they are unlikely to be hit accidentally.
+
+**Same item routed to two addresses.** The allocation phase exists precisely for this case, but it
+requires two source panels carrying an identical filter, wired to one consumer panel and routed to
+different addresses. Every setup tested so far used distinct items per address, so the buckets were
+disjoint per item and never competed for the same stock. The single pass is correct by construction
+— it never reads a packager's summary twice — but the contention path itself is unproven.
+
+**One order spanning more than one package.** A package holds `PackageItem.SLOTS` = 9 slots, and
+`FactoryPanelScreen` clamps each ingredient amount to 1–64 with at most 9 ingredient links, so an
+order of ordinary 64-stacking items can never exceed a single package. Reaching a second package
+requires items with a smaller maximum stack size — ten lava buckets occupy ten slots. Until that is
+run, `packageCounter` continuity across packages of one order, the placement of the order context,
+and the final-link flag are only verified structurally, not observed.
+
+Neither gap affects the cases that have been exercised: overrides and inheritance, two addresses in
+one cycle producing one correctly addressed package each, both trigger paths, sustained operation,
+and both gauge types.
+
 ### Factory Controller
 
 - Virtual gauge overrides can be created, edited, cleared, and persisted.
@@ -254,8 +276,16 @@ require permission level 2 and apply the same structural validation as network r
 
 ## 12. Current status
 
-The project builds against Create `6.0.10-281`. Regular Factory Panel routing, optional Factory
-Controller routing, persistence, dispatch, synchronization, and the routing UI have been exercised
-in-game. Both dependency configurations build successfully. The routing interface uses embedded
-side panels where space permits and compact screens at smaller resolutions without changing the
-routing data or dispatch contract described above.
+The project builds against Create `6.0.10-281`. Both dependency configurations build successfully,
+and the mod starts cleanly with and without Create: Factory Controller — without it, the three
+`@Pseudo` compatibility mixins are skipped with a warning and nothing else changes.
+
+Exercised in game: per-ingredient overrides and inheritance, two addresses within one craft cycle
+producing exactly one correctly addressed package each, both trigger paths (manual crafting request
+and stock threshold), sustained operation across many consecutive cycles, persistence, the routing
+UI, and both the regular Factory Panel and a Factory Controller virtual gauge.
+
+The routing interface uses embedded side panels where space permits and compact screens at smaller
+resolutions without changing the routing data or dispatch contract described above.
+
+Two cases remain unverified at runtime; see *Known gaps* in §11.
