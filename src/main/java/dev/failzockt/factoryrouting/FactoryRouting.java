@@ -27,7 +27,7 @@ public class FactoryRouting {
 	 * Per-block-entity routing overrides, attached to Create's {@code FactoryPanelBlockEntity}.
 	 *
 	 * <p>Block entity attachments are not synchronised to clients automatically on 1.21.1; the GUI
-	 * gets its copy through a dedicated payload (SPEC.md §8.3).
+	 * gets its copy through a dedicated payload (SPEC.md §7).
 	 */
 	public static final Supplier<AttachmentType<BoardRouting>> BOARD_ROUTING =
 		ATTACHMENT_TYPES.register("board_routing", () -> AttachmentType

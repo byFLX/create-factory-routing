@@ -10,7 +10,7 @@ import net.minecraft.network.codec.StreamCodec;
 /**
  * Routing override for a single ingredient link of a factory panel.
  *
- * <p>An empty address means "inherit from the panel's own {@code recipeAddress}". See SPEC.md §3
+ * <p>An empty address means "inherit from the panel's own {@code recipeAddress}". See SPEC.md §1
  * for the resolution order.
  */
 public record IngredientRoute(String address) {

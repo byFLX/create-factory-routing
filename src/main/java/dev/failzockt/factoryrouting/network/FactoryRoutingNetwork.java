@@ -73,6 +73,12 @@ public final class FactoryRoutingNetwork {
 		if (selection == null || !selection.behaviour().targetedBy.containsKey(payload.source()))
 			return;
 
+		// The ingredient may be sourced from a different logistics network than the panel it feeds,
+		// so being allowed to touch the target panel is not enough on its own.
+		FactoryPanelBehaviour source = FactoryPanelBehaviour.at(player.serverLevel(), payload.source());
+		if (source == null || !Create.LOGISTICS.mayInteract(source.network, player))
+			return;
+
 		IngredientRoute route = payload.route();
 		PanelRouting current = RoutingAccess.get(selection.panel(), selection.behaviour().slot);
 		RoutingAccess.set(selection.panel(), selection.behaviour().slot, current.with(payload.source(), route));

@@ -16,7 +16,7 @@ import dev.failzockt.factoryrouting.dispatch.RoutedDispatch;
  * <p>The injection sits after {@code resetTimer()} on purpose: every early return and the timer
  * countdown have already run at that point, so cancelling cannot leave the panel spinning, and we
  * are still ahead of the {@code recipeAddress.isBlank()} guard that we need to relax. See
- * SPEC.md §8.2.
+ * SPEC.md §6.2.
  */
 @Mixin(FactoryPanelBehaviour.class)
 public abstract class FactoryPanelBehaviourMixin {

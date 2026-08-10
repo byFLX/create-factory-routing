@@ -42,7 +42,7 @@ public record PanelRouting(Map<FactoryPanelPosition, IngredientRoute> routes) {
 	}
 
 	/**
-	 * Effective target address of one ingredient link. Implements SPEC.md §3: an explicit override
+	 * Effective target address of one ingredient link. Implements SPEC.md §1: an explicit override
 	 * wins, otherwise the panel's own address is inherited. A blank result means the link cannot be
 	 * routed at all.
 	 */

@@ -99,7 +99,7 @@ public final class RoutedDispatch {
 
 		// 2. Check availability on the aggregate, never per address. Mirrors tickRequests:449-469.
 		// Splitting first would let two links for the same item each pass their own check and
-		// overcommit the network between them. See SPEC.md §6.1.
+		// overcommit the network between them. See SPEC.md §6.
 		boolean failed = false;
 		for (Entry<UUID, Map<ItemStack, ItemStackConnections>> networkEntry : consolidated.entrySet()) {
 			InventorySummary summary = LogisticsManager.getSummaryOfNetwork(networkEntry.getKey(), true);
@@ -130,7 +130,7 @@ public final class RoutedDispatch {
 					String address = routing.resolve(connection.from, behaviour.recipeAddress);
 
 					// An ingredient with no resolvable address aborts the whole craft rather than
-					// letting a partial recipe reach the machine. SPEC.md §3.
+					// letting a partial recipe reach the machine. SPEC.md §1.
 					if (address.isBlank())
 						return true;
 
@@ -155,7 +155,7 @@ public final class RoutedDispatch {
 		try {
 			// 4. Plan every bucket. findPackagersForRequest does not reserve anything, so without
 			// the ledger two buckets on the same network would plan the same items twice.
-			// SPEC.md §6.4.
+			// SPEC.md §6.1.
 			for (Entry<UUID, Map<String, List<BigItemStack>>> networkEntry : buckets.entrySet()) {
 				UUID network = networkEntry.getKey();
 				for (Entry<String, List<BigItemStack>> bucket : networkEntry.getValue()
@@ -200,46 +200,4 @@ public final class RoutedDispatch {
 				new FactoryPanelEffectPacket(from, behaviour.getPanelPosition(), success));
 	}
 
-	/**
-	 * Temporarily deducts planned withdrawals from the packagers' cached inventory summaries so
-	 * that a later planning pass in the same tick sees stock the earlier pass already claimed.
-	 *
-	 * <p>Mirrors what {@code LogisticallyLinkedBehaviour.deductFromAccurateSummary} does at send
-	 * time. Holds a direct reference to each summary object instead of re-fetching it, so a
-	 * rebuilt summary can never be corrupted by the rollback.
-	 */
-	private static final class StockLedger {
-
-		private record Reservation(InventorySummary summary, ItemStack stack, int count) {
-		}
-
-		private final List<Reservation> reservations = new ArrayList<>();
-
-		void reserve(Multimap<PackagerBlockEntity, PackagingRequest> plan) {
-			for (Entry<PackagerBlockEntity, PackagingRequest> entry : plan.entries()) {
-				PackagingRequest request = entry.getValue();
-				int requested = request.getCount();
-				if (requested <= 0)
-					continue;
-
-				InventorySummary summary = entry.getKey()
-					.getAvailableItems();
-				int reserved = Math.min(summary.getCountOf(request.item()), requested);
-				if (reserved <= 0)
-					continue;
-
-				summary.add(request.item(), -reserved);
-				reservations.add(new Reservation(summary, request.item(), reserved));
-			}
-		}
-
-		void release() {
-			for (int i = reservations.size() - 1; i >= 0; i--) {
-				Reservation reservation = reservations.get(i);
-				reservation.summary()
-					.add(reservation.stack(), reservation.count());
-			}
-			reservations.clear();
-		}
-	}
 }

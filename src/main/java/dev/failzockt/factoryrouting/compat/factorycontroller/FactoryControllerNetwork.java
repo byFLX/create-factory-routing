@@ -36,19 +36,19 @@ public final class FactoryControllerNetwork {
 		PacketDistributor.sendToServer(new ConfigureVirtualRoutePayload(controller, gauge, source, route));
 	}
 
+	// PayloadRegistrar defaults to HandlerThread.MAIN, so handlers already run on the server
+	// thread and no enqueueWork is needed here -- same as the plain Create path.
 	private static void handleConfiguration(ConfigureVirtualRoutePayload payload, IPayloadContext context) {
-		context.enqueueWork(() -> {
-			if (!(context.player() instanceof ServerPlayer player))
-				return;
-			VirtualSelection selection = findGauge(player, payload.controller(), payload.gauge(), payload.source());
-			if (selection == null)
-				return;
+		if (!(context.player() instanceof ServerPlayer player))
+			return;
+		VirtualSelection selection = findGauge(player, payload.controller(), payload.gauge(), payload.source());
+		if (selection == null)
+			return;
 
-			VirtualPanelRouting current = VirtualRoutingAccess.get(selection.gauge());
-			VirtualRoutingAccess.set(selection.gauge(), current.with(payload.source(), payload.route()));
-			selection.controller().setChanged();
-			selection.controller().syncComponentFull(payload.gauge());
-		});
+		VirtualPanelRouting current = VirtualRoutingAccess.get(selection.gauge());
+		VirtualRoutingAccess.set(selection.gauge(), current.with(payload.source(), payload.route()));
+		selection.controller().setChanged();
+		selection.controller().syncComponentFull(payload.gauge());
 	}
 
 	private static VirtualSelection findGauge(ServerPlayer player, BlockPos controllerPos,

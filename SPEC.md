@@ -103,8 +103,27 @@ independently could allow two buckets to approve the same physical stock.
 
 Create normally plans one request per logistics network. This addon may plan several address buckets
 against the same network. After each plan, the selected quantities are deducted from the temporary
-available-item summaries before planning the next bucket. This prevents multiple buckets from
-selecting the same stock.
+available-item summaries before planning the next bucket, so a later bucket cannot select stock an
+earlier bucket already claimed.
+
+The deduction only reaches the next planning pass while the packager keeps its cached summary, and
+it does that only for versioned inventories. The ledger therefore distinguishes three cases:
+
+| Target inventory | Behavior |
+|---|---|
+| `VersionedInventoryWrapper` | Reservation applies; the deduction is visible to later buckets. |
+| `BottomlessItemHandler` | No reservation required — infinite stock cannot be overdrawn. No warning. |
+| Any other handler | No summary mutation at all. Warned once per handler class. Double planning against that packager remains possible. |
+
+Non-versioned summaries must not be mutated. `PackagerBlockEntity` rebuilds its summary on every
+call for them, so a reservation would be lost in any case — but the rebuild also feeds the lowered
+summary into `submitNewArrivals`, which subtracts the fresh summary from it and reports every
+negative entry through `RequestPromiseQueue.itemEnteredSystem`. That retires promises which were
+never fulfilled: the panel treats its order as delivered and stops re-requesting. Losing a
+reservation only degrades the split; mutating would stall production.
+
+Closing the remaining gap requires planning all buckets in a single walk over the network's links,
+which means reimplementing `LogisticsManager.findPackagersForRequest`. Not done.
 
 Temporary summary changes are invalidated after planning or aborting so later request cycles rebuild
 their view from the actual inventories.
@@ -189,8 +208,12 @@ require permission level 2 and apply the same structural validation as network r
 ### Atomicity and stock accounting
 
 - If one ingredient is unavailable, no bucket is dispatched.
-- Two address buckets requesting the same item do not allocate the same stock twice.
+- Two address buckets requesting the same item do not allocate the same stock twice, for packagers
+  backed by a `VersionedInventoryWrapper`.
 - The previous case works when stock is split across two packagers.
+- A packager backed by a non-versioned handler logs exactly one warning per handler class, has its
+  summary left untouched, retires no promises, and does not stall production. Its stock may still be
+  planned twice; that is the documented limitation in §6.1.
 - A busy packager aborts the complete cycle and does not leave stale summary data.
 - One recipe cycle creates exactly one output promise.
 

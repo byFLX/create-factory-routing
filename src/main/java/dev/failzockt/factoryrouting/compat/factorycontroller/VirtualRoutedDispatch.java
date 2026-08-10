@@ -10,12 +10,13 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
 import com.simibubi.create.content.logistics.BigItemStack;
 import com.simibubi.create.content.logistics.packager.IdentifiedInventory;
-import com.simibubi.create.content.logistics.packager.InventorySummary;
 import com.simibubi.create.content.logistics.packager.PackagerBlockEntity;
 import com.simibubi.create.content.logistics.packager.PackagingRequest;
 import com.simibubi.create.content.logistics.packagerLink.LogisticsManager;
 import com.simibubi.create.content.logistics.stockTicker.PackageOrder;
 import com.simibubi.create.content.logistics.stockTicker.PackageOrderWithCrafts;
+
+import dev.failzockt.factoryrouting.dispatch.StockLedger;
 
 import io.github.nbcss.createfactorycontroller.content.GaugeWorkMode;
 import io.github.nbcss.createfactorycontroller.content.block.FactoryControllerBlockEntity;
@@ -87,6 +88,18 @@ public final class VirtualRoutedDispatch {
 		return sources;
 	}
 
+	/**
+	 * Distributes an already-merged order back onto addresses, weighted by how much each source
+	 * link contributes.
+	 *
+	 * <p>Unlike the plain Create path, where every ingredient link carries its own exact amount,
+	 * Factory Controller has already summed identical items across links by the time we see the
+	 * order. The split is therefore exact only while the requested count equals the sum of the
+	 * contributing link amounts — the normal case. When Factory Controller asks for less than full
+	 * demand (partial restock), the remainder is apportioned proportionally and the last bucket
+	 * absorbs the rounding, which is a heuristic rather than a reconstruction of the original
+	 * per-link amounts.
+	 */
 	private static Map<String, List<BigItemStack>> splitMerged(VirtualGaugeBehaviour gauge,
 		PackageOrderWithCrafts order, List<SourceRoute> sources, String defaultAddress) {
 		Map<SourceRoute, Integer> craftingWeights = craftingWeights(gauge, sources);
@@ -205,36 +218,5 @@ public final class VirtualRoutedDispatch {
 
 	private record SourceRoute(VirtualComponentPosition position, VirtualGaugeBehaviour gauge,
 		int amount, String address) {
-	}
-
-	private static final class StockLedger {
-
-		private record Reservation(InventorySummary summary, ItemStack stack, int count) {
-		}
-
-		private final List<Reservation> reservations = new ArrayList<>();
-
-		void reserve(Multimap<PackagerBlockEntity, PackagingRequest> plan) {
-			for (Map.Entry<PackagerBlockEntity, PackagingRequest> entry : plan.entries()) {
-				PackagingRequest request = entry.getValue();
-				int requested = request.getCount();
-				if (requested <= 0)
-					continue;
-				InventorySummary summary = entry.getKey().getAvailableItems();
-				int reserved = Math.min(summary.getCountOf(request.item()), requested);
-				if (reserved <= 0)
-					continue;
-				summary.add(request.item(), -reserved);
-				reservations.add(new Reservation(summary, request.item(), reserved));
-			}
-		}
-
-		void release() {
-			for (int i = reservations.size() - 1; i >= 0; i--) {
-				Reservation reservation = reservations.get(i);
-				reservation.summary().add(reservation.stack(), reservation.count());
-			}
-			reservations.clear();
-		}
 	}
 }

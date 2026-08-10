@@ -111,12 +111,3 @@ tasks.withType(JavaCompile).configureEach {
 java {
     withSourcesJar()
 }
-
-// Keep the NeoForge metadata declaration and also expose the config through the
-// standard manifest attribute. Some launcher/mod combinations only discover
-// addon mixins through the latter during the early transformation phase.
-tasks.named('jar', Jar).configure {
-    manifest {
-        attributes 'MixinConfigs': "${mod_id}.mixins.json"
-    }
-}
