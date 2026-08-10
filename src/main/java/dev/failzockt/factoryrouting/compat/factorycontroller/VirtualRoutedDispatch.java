@@ -16,7 +16,7 @@ import com.simibubi.create.content.logistics.packagerLink.LogisticsManager;
 import com.simibubi.create.content.logistics.stockTicker.PackageOrder;
 import com.simibubi.create.content.logistics.stockTicker.PackageOrderWithCrafts;
 
-import dev.failzockt.factoryrouting.dispatch.StockLedger;
+import dev.failzockt.factoryrouting.dispatch.RoutedPlanner;
 
 import io.github.nbcss.createfactorycontroller.content.GaugeWorkMode;
 import io.github.nbcss.createfactorycontroller.content.block.FactoryControllerBlockEntity;
@@ -53,23 +53,22 @@ public final class VirtualRoutedDispatch {
 		if (buckets.isEmpty())
 			return LogisticsManager.findPackagersForRequest(network, order, excludedInventory, defaultAddress);
 
-		ArrayListMultimap<PackagerBlockEntity, PackagingRequest> combined = ArrayListMultimap.create();
-		StockLedger ledger = new StockLedger();
-		try {
-			for (Map.Entry<String, List<BigItemStack>> bucket : buckets.entrySet()) {
-				PackageOrderWithCrafts routedOrder = new PackageOrderWithCrafts(
-					new PackageOrder(bucket.getValue()), order.orderedCrafts());
-				Multimap<PackagerBlockEntity, PackagingRequest> plan = LogisticsManager.findPackagersForRequest(
-					network, routedOrder, excludedInventory, bucket.getKey());
-				if (plan.isEmpty())
-					return ArrayListMultimap.create();
-				combined.putAll(plan);
-				ledger.reserve(plan);
-			}
-		} finally {
-			ledger.release();
-		}
-		return combined;
+		// One walk over the network's links covering every address, so two addresses can never be
+		// planned against the same physical stock. See SPEC.md §6.1.
+		List<RoutedPlanner.AddressOrder> addressOrders = new ArrayList<>();
+		for (Map.Entry<String, List<BigItemStack>> bucket : buckets.entrySet())
+			addressOrders.add(new RoutedPlanner.AddressOrder(bucket.getKey(),
+				new PackageOrderWithCrafts(new PackageOrder(bucket.getValue()), order.orderedCrafts())));
+
+		RoutedPlanner.Plan plan = RoutedPlanner.plan(network, addressOrders, excludedInventory);
+
+		// An incomplete plan aborts the cycle: Factory Controller sends nothing for an empty result.
+		if (!plan.complete())
+			return ArrayListMultimap.create();
+
+		// The redirect must hand back a single multimap, so the per-address plans are flattened
+		// block by block to keep every order's requests contiguous per packager.
+		return RoutedPlanner.mergeContiguously(plan.addressPlans());
 	}
 
 	private static List<SourceRoute> sourcesFor(VirtualGaugeBehaviour gauge,

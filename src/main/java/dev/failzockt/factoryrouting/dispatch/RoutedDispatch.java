@@ -28,6 +28,7 @@ import com.simibubi.create.content.logistics.stockTicker.PackageOrder;
 import com.simibubi.create.content.logistics.stockTicker.PackageOrderWithCrafts;
 import com.simibubi.create.foundation.advancement.AllAdvancements;
 
+import dev.failzockt.factoryrouting.dispatch.RoutedPlanner.AddressOrder;
 import dev.failzockt.factoryrouting.routing.PanelRouting;
 import dev.failzockt.factoryrouting.routing.RoutingAccess;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenCustomHashMap;
@@ -46,8 +47,8 @@ import net.minecraft.world.level.Level;
  * <ol>
  * <li>ingredients are split into {@code (network, address)} buckets before dispatch instead of
  * going out as one order per network, and</li>
- * <li>a {@link StockLedger} keeps the planning passes of those buckets from claiming the same
- * physical items twice.</li>
+ * <li>planning goes through {@link RoutedPlanner}, which covers every address of a network in a
+ * single walk over its links so two addresses can never claim the same physical stock.</li>
  * </ol>
  *
  * <p>Availability checking, the busy check, execution and the output promise are deliberately
@@ -149,36 +150,35 @@ public final class RoutedDispatch {
 				.map(stack -> new BigItemStack(stack.copyWithCount(1)))
 				.toList());
 
+		// 4. Plan every network once, covering all of its addresses in a single walk over the
+		// links. Calling Create's per-address planner repeatedly would let two addresses claim the
+		// same physical stock. SPEC.md §6.1.
 		List<Multimap<PackagerBlockEntity, PackagingRequest>> plans = new ArrayList<>();
-		StockLedger ledger = new StockLedger();
+		for (Entry<UUID, Map<String, List<BigItemStack>>> networkEntry : buckets.entrySet()) {
+			List<AddressOrder> addressOrders = new ArrayList<>();
+			for (Entry<String, List<BigItemStack>> bucket : networkEntry.getValue()
+				.entrySet())
+				addressOrders.add(new AddressOrder(bucket.getKey(),
+					new PackageOrderWithCrafts(new PackageOrder(new ArrayList<>(bucket.getValue())),
+						craftingContext.orderedCrafts())));
 
-		try {
-			// 4. Plan every bucket. findPackagersForRequest does not reserve anything, so without
-			// the ledger two buckets on the same network would plan the same items twice.
-			// SPEC.md §6.1.
-			for (Entry<UUID, Map<String, List<BigItemStack>>> networkEntry : buckets.entrySet()) {
-				UUID network = networkEntry.getKey();
-				for (Entry<String, List<BigItemStack>> bucket : networkEntry.getValue()
-					.entrySet()) {
-					PackageOrderWithCrafts order = new PackageOrderWithCrafts(
-						new PackageOrder(new ArrayList<>(bucket.getValue())), craftingContext.orderedCrafts());
-					Multimap<PackagerBlockEntity, PackagingRequest> plan =
-						LogisticsManager.findPackagersForRequest(network, order, null, bucket.getKey());
-					plans.add(plan);
-					ledger.reserve(plan);
-				}
-			}
+			RoutedPlanner.Plan plan = RoutedPlanner.plan(networkEntry.getKey(), addressOrders, null);
 
-			// 5. Cancel everything if any packager is busy. Mirrors tickRequests:492-495.
-			for (Multimap<PackagerBlockEntity, PackagingRequest> plan : plans)
-				for (PackagerBlockEntity packager : plan.keySet())
-					if (packager.isTooBusyFor(RequestType.RESTOCK))
-						return true;
+			// Anything short aborts the whole cycle: a partial delivery would leave the machine
+			// waiting while the output promise below marks the craft as already in flight.
+			if (!plan.complete())
+				return true;
 
-		} finally {
-			// Release before sending: the real deduction happens inside performPackageRequests.
-			ledger.release();
+			// Kept as one plan per address. Merging orders under a shared packager key would let
+			// attemptToSend interleave them, restarting the package counter mid-order.
+			plans.addAll(plan.addressPlans());
 		}
+
+		// 5. Cancel everything if any packager is busy. Mirrors tickRequests:492-495.
+		for (Multimap<PackagerBlockEntity, PackagingRequest> plan : plans)
+			for (PackagerBlockEntity packager : plan.keySet())
+				if (packager.isTooBusyFor(RequestType.RESTOCK))
+					return true;
 
 		// 6. Send. Mirrors tickRequests:498-499.
 		for (Multimap<PackagerBlockEntity, PackagingRequest> plan : plans)

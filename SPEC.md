@@ -99,34 +99,49 @@ The routed cycle is:
 Availability must remain aggregated by `(network, item)`, not by address. Checking address buckets
 independently could allow two buckets to approve the same physical stock.
 
-### 6.1 Planning ledger
+### 6.1 Single-pass planning
 
-Create normally plans one request per logistics network. This addon may plan several address buckets
-against the same network. After each plan, the selected quantities are deducted from the temporary
-available-item summaries before planning the next bucket, so a later bucket cannot select stock an
-earlier bucket already claimed.
+`LogisticsManager.findPackagersForRequest` plans exactly one address per call and reserves nothing:
+it reads each packager's cached item summary and returns a plan. Calling it once per address would
+let two addresses select the same physical stock — both pick the first packager reporting enough,
+one address is under-delivered, and stock sitting on a second packager is never touched. Since the
+panel records its single output promise in the same cycle, and promises do not expire under the
+default panel settings, that panel then stops requesting altogether.
 
-The deduction only reaches the next planning pass while the packager keeps its cached summary, and
-it does that only for versioned inventories. The ledger therefore distinguishes three cases:
+The addon therefore plans an entire network in one walk over its links, in two phases:
 
-| Target inventory | Behavior |
-|---|---|
-| `VersionedInventoryWrapper` | Reservation applies; the deduction is visible to later buckets. |
-| `BottomlessItemHandler` | No reservation required — infinite stock cannot be overdrawn. No warning. |
-| Any other handler | No summary mutation at all. Warned once per handler class. Double planning against that packager remains possible. |
+1. **Allocation.** Every link is visited once. Each packager's available items are read once and
+   handed out to the outstanding demands of all addresses, subtracting from a local tally as it
+   goes. No packager can be counted twice, and Create's cached summaries are never modified.
+2. **Request construction.** Create's own loop shape is replayed per address — items outer, links
+   inner — using the amounts decided in phase one. `orderId`, the order context carried by the first
+   package, `linkIndex` and the shared `finalLink` flag are produced in exactly the sequence Create
+   produces them, so package grouping, defragmentation and order completion behave unchanged.
 
-Non-versioned summaries must not be mutated. `PackagerBlockEntity` rebuilds its summary on every
-call for them, so a reservation would be lost in any case — but the rebuild also feeds the lowered
-summary into `submitNewArrivals`, which subtracts the fresh summary from it and reports every
-negative entry through `RequestPromiseQueue.itemEnteredSystem`. That retires promises which were
-never fulfilled: the panel treats its order as delivered and stops re-requesting. Losing a
-reservation only degrades the split; mutating would stall production.
+Each address is an independent order with its own `orderId`, context, `finalLink` tracker and its
+own request multimap. `PackagerBlockEntity.attemptToSend` packs consecutive requests only while
+address and `orderId` match, and ends the current package on the first mismatch. Two orders sharing
+a packager key in an unordered multimap could therefore interleave, restarting the package counter
+in the middle of an order and moving its context into a later package. Create never places more
+than one order into a multimap.
 
-Closing the remaining gap requires planning all buckets in a single walk over the network's links,
-which means reimplementing `LogisticsManager.findPackagersForRequest`. Not done.
+The regular panel path keeps the address plans separate for the same reason and executes them
+individually, after one shared busy check across all of them. The Factory Controller redirect must
+return a single multimap, so it is the deliberate exception: the finished address plans are
+concatenated block by block into an `ArrayListMultimap`, whose per-key insertion order keeps every
+order contiguous. Ordering inside one address plan does not matter, since it holds a single address
+and `orderId`.
 
-Temporary summary changes are invalidated after planning or aborting so later request cycles rebuild
-their view from the actual inventories.
+One deviation remains in that merged form: `performPackageRequests` retries a packager at most 100
+times per call, and that budget is then shared across all addresses of the same packager. It is
+reachable with very large or very many multi-address orders on one packager.
+
+If any requested amount cannot be covered, planning reports an incomplete result and the cycle is
+abandoned: nothing is sent and no output promise is created. A partial delivery is never acceptable,
+because it strands the machine while marking the craft as already in flight.
+
+Planning stays side-effect free. Nothing is withdrawn until `performPackageRequests` runs. The
+inventory type behind a packager is irrelevant to correctness.
 
 ### 6.2 Passthrough behavior
 
@@ -208,14 +223,18 @@ require permission level 2 and apply the same structural validation as network r
 ### Atomicity and stock accounting
 
 - If one ingredient is unavailable, no bucket is dispatched.
-- Two address buckets requesting the same item do not allocate the same stock twice, for packagers
-  backed by a `VersionedInventoryWrapper`.
-- The previous case works when stock is split across two packagers.
-- A packager backed by a non-versioned handler logs exactly one warning per handler class, has its
-  summary left untouched, retires no promises, and does not stall production. Its stock may still be
-  planned twice; that is the documented limitation in §6.1.
-- A busy packager aborts the complete cycle and does not leave stale summary data.
+- 64 of one item to address A and 64 to address B, served from two ordinary chests holding 64 each:
+  both addresses receive 64. The inventory type must not affect the outcome.
+- The same split served from a single inventory holding 128.
+- The same split across a mixed pair of an ordinary chest and an Item Vault.
+- Insufficient total stock: nothing is sent and no output promise is created.
+- A busy packager aborts the complete cycle.
 - One recipe cycle creates exactly one output promise.
+- Two items of the same address drawn from one packager, plus a second address on that packager,
+  with amounts large enough to need several packages: package indices stay continuous per order,
+  the order context rides on the first package of its own order, and the final-link flag closes
+  each order exactly once.
+- Every case above on a regular Factory Panel and through a Factory Controller virtual gauge.
 
 ### Factory Controller
 
