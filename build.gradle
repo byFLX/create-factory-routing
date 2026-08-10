@@ -111,3 +111,15 @@ tasks.withType(JavaCompile).configureEach {
 java {
     withSourcesJar()
 }
+
+// Ship the project licence and the third-party notices inside the published artifacts, so the
+// attribution required by Create's and Factory Controller's MIT licences travels with the JAR.
+tasks.named('jar', Jar).configure {
+    from(file('LICENSE')) { into 'META-INF' }
+    from(file('THIRD_PARTY_NOTICES.md')) { into 'META-INF' }
+}
+
+tasks.named('sourcesJar', Jar).configure {
+    from(file('LICENSE')) { into 'META-INF' }
+    from(file('THIRD_PARTY_NOTICES.md')) { into 'META-INF' }
+}

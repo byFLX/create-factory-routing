@@ -123,6 +123,32 @@ item routed to two different addresses, and a single order large enough to span 
 package. Both require a deliberately unusual board, which is also why they are unlikely to occur by
 accident. See *Known gaps* in [SPEC.md](SPEC.md).
 
+## Credits and licensing
+
+Create: Factory Routing is an independent addon for
+[Create](https://www.curseforge.com/minecraft/mc-mods/create) and is not affiliated with or endorsed
+by the Create Team.
+
+Portions of the routed request-planning implementation are adapted from the MIT-licensed Create
+codebase:
+
+- Create — Copyright (c) The Create Team / The Creators of Create
+- Source: <https://github.com/Creators-of-Create/Create>
+- License: <https://github.com/Creators-of-Create/Create/blob/mc1.21.1/dev/LICENSE.md>
+
+Optional compatibility is provided for
+[Create: Factory Controller](https://www.curseforge.com/minecraft/mc-mods/create-factory-controller):
+
+- Create: Factory Controller — Copyright (c) 2026 nbcss
+- Source: <https://github.com/nbcss/create-factory-controller>
+- License: <https://github.com/nbcss/create-factory-controller/blob/main/LICENSE>
+
+No graphical, audio, or other binary assets from Create or Create: Factory Controller are bundled
+with this addon. Both projects remain separate dependencies and are distributed by their respective
+authors.
+
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the complete license notices.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).

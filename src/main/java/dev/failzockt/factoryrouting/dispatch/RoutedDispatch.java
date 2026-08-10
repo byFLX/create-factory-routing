@@ -1,3 +1,13 @@
+/*
+ * Portions of this file are adapted from Create, specifically from
+ * FactoryPanelBehaviour.tickRequests().
+ *
+ * Create — Copyright (c) The Create Team / The Creators of Create
+ * Source:  https://github.com/Creators-of-Create/Create
+ * License: MIT — https://github.com/Creators-of-Create/Create/blob/mc1.21.1/dev/LICENSE.md
+ *
+ * See THIRD_PARTY_NOTICES.md for the complete notice.
+ */
 package dev.failzockt.factoryrouting.dispatch;
 
 import java.util.ArrayList;
