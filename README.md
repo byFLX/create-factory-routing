@@ -1,11 +1,11 @@
 # Create: Factory Routing
 
-Per-ingredient target addresses for Create's Factory Panels.
+Per-ingredient package routing for Create's Factory Gauges.
 
-Create normally assigns one recipe address to every ingredient of a Factory Panel recipe. This
-addon lets each ingredient use its own optional target address while keeping the panel address as
-the default. A single recipe panel can therefore route different ingredients to different machines
-without splitting the recipe across several panels.
+Create: Factory Routing adds per-ingredient package addresses to Create's Factory Gauges. Instead of
+sending every ingredient in a recipe to the same address, each ingredient can inherit the gauge's
+default address or use a custom destination. A single recipe gauge can therefore supply several
+machines without splitting the recipe across multiple gauges.
 
 | Requirement | Version |
 |---|---|
@@ -18,20 +18,20 @@ without splitting the recipe across several panels.
 ## Features
 
 - Optional target-address override for every ingredient link
-- The original Factory Panel address remains the default
+- The gauge's own address remains the default for every ingredient that has no override
 - Atomic availability checks across all ingredients before dispatch
 - Several addresses on one logistics network are planned in a single pass, so two of them can never
   be assigned the same stock, whatever inventory sits behind the packager
 - Embedded ingredient list and per-ingredient address editor
 - Compact routing fallback for resolutions without enough side space
-- Native compatibility with regular Create Factory Panels
+- Native compatibility with regular Create Factory Gauges
 - Optional compatibility with Create: Factory Controller virtual gauges
 - Persistent, server-authoritative routing data
 - `/cfr` diagnostic commands for controlled testing
 
 ## Using the routing UI
 
-1. Open a Factory Panel in recipe mode.
+1. Open a Factory Gauge in recipe mode.
 2. Select the routing icon next to the normal panel controls to show the routing side panels.
 3. Choose an ingredient in the list on the left, or use its small **R** shortcut in the recipe grid.
 4. Edit the target address on the right and select **Save**.
@@ -98,8 +98,9 @@ Valid slot names are `top_left`, `top_right`, `bottom_left`, and `bottom_right`.
 ## Technical overview
 
 The addon stores routing overrides as NeoForge data attachments instead of adding fields directly
-to Create classes. A small Mixin delegates panels with active overrides to the routed dispatch
-implementation; panels without overrides continue through Create's original code path.
+to Create classes. A small Mixin into Create's `FactoryPanelBehaviour` — the class behind a Factory
+Gauge — delegates gauges with active overrides to the routed dispatch implementation; gauges without
+overrides continue through Create's original code path.
 
 Create plans one target address per call and reserves nothing while it plans, so calling it once per
 address would let two addresses select the same physical stock — one of them silently under-delivered
@@ -116,7 +117,7 @@ validation checklist.
 
 Working and in use. Per-ingredient overrides and inheritance, two addresses within one craft cycle,
 both trigger paths, sustained operation, persistence, the routing UI, and both regular Factory
-Panels and Factory Controller virtual gauges have been exercised in game.
+Gauges and Factory Controller virtual gauges have been exercised in game.
 
 Two dispatch cases are correct by construction but have not been reproduced in game yet: the same
 item routed to two different addresses, and a single order large enough to span more than one
