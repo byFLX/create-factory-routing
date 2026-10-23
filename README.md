@@ -13,7 +13,7 @@ across several gauges.
 - Minecraft 1.21.1
 - NeoForge 21.1.227 or newer
 - Create 6.0.10 — required and tested
-- Create: Factory Controller 1.1.1 — optional and tested
+- Create: Factory Controller 1.2.1 to 1.2.3 — optional; built against 1.2.3
 - Java 21
 
 ## Features
@@ -129,6 +129,11 @@ Two dispatch cases have not been reproduced in game yet: the same item routed to
 addresses, and a single order large enough to span more than one package. Both are implemented and
 reviewed against Create's own code, but neither has been observed at runtime. Large Factory
 Controller recipes in particular can reach the second case. See *Known gaps* in [SPEC.md](SPEC.md).
+
+Factory Controller 1.2 moved the gauge classes into a new package and replaced the connection
+lookup the compatibility layer used. The addon follows those changes and builds against 1.2.3. A
+first run with 1.2.3 installed starts and works; the full checklist in [SPEC.md](SPEC.md) has not
+been repeated on the 1.2 line. The regular Factory Gauge path is unaffected.
 
 ## Credits and licensing
 

@@ -20,11 +20,11 @@ import dev.failzockt.factoryrouting.dispatch.RoutedPlanner;
 
 import io.github.nbcss.createfactorycontroller.content.GaugeWorkMode;
 import io.github.nbcss.createfactorycontroller.content.block.FactoryControllerBlockEntity;
-import io.github.nbcss.createfactorycontroller.content.component.RecipeSlot;
 import io.github.nbcss.createfactorycontroller.content.component.VirtualComponentPosition;
-import io.github.nbcss.createfactorycontroller.content.component.VirtualGaugeBehaviour;
 import io.github.nbcss.createfactorycontroller.content.component.connection.Connection;
 import io.github.nbcss.createfactorycontroller.content.component.connection.LogisticsConnection;
+import io.github.nbcss.createfactorycontroller.content.component.gauge.RecipeSlot;
+import io.github.nbcss.createfactorycontroller.content.component.gauge.VirtualGaugeBehaviour;
 import net.minecraft.world.item.ItemStack;
 
 /** Splits Factory Controller's already-validated item order into per-address planning passes. */
@@ -74,15 +74,17 @@ public final class VirtualRoutedDispatch {
 	private static List<SourceRoute> sourcesFor(VirtualGaugeBehaviour gauge,
 		FactoryControllerBlockEntity controller, UUID network, VirtualPanelRouting routing, String defaultAddress) {
 		List<SourceRoute> sources = new ArrayList<>();
-		for (Map.Entry<VirtualComponentPosition, Connection> entry : gauge.targetedBy().entrySet()) {
-			if (!(entry.getValue() instanceof LogisticsConnection connection))
+		for (Connection incoming : gauge.incomingConnections()) {
+			if (!(incoming instanceof LogisticsConnection connection))
 				continue;
-			if (!(controller.components.get(entry.getKey()) instanceof VirtualGaugeBehaviour source))
+			VirtualComponentPosition sourcePos = incoming.from;
+			if (!(controller.components.get(sourcePos) instanceof VirtualGaugeBehaviour source))
 				continue;
 			if (!network.equals(source.networkId) || source.filter.isEmpty())
 				continue;
-			sources.add(new SourceRoute(entry.getKey(), source, connection.amount(),
-				routing.resolve(entry.getKey(), defaultAddress)));
+			sources.add(new SourceRoute(sourcePos, source, connection.amount(),
+				connection.excludeFromRequestMultiplier,
+				routing.resolve(sourcePos, defaultAddress)));
 		}
 		return sources;
 	}
@@ -94,10 +96,10 @@ public final class VirtualRoutedDispatch {
 	 * <p>Unlike the plain Create path, where every ingredient link carries its own exact amount,
 	 * Factory Controller has already summed identical items across links by the time we see the
 	 * order. The split is therefore exact only while the requested count equals the sum of the
-	 * contributing link amounts — the normal case. When Factory Controller asks for less than full
-	 * demand (partial restock), the remainder is apportioned proportionally and the last bucket
-	 * absorbs the rounding, which is a heuristic rather than a reconstruction of the original
-	 * per-link amounts.
+	 * contributing link amounts, scaled the way Factory Controller scaled them — see
+	 * {@link #requestScaler}. Where that reconstruction does not come out even, the remainder is
+	 * apportioned proportionally and the last bucket absorbs the rounding, which is a heuristic
+	 * rather than a reconstruction of the original per-link amounts.
 	 */
 	private static Map<String, List<BigItemStack>> splitMerged(VirtualGaugeBehaviour gauge,
 		PackageOrderWithCrafts order, List<SourceRoute> sources, String defaultAddress) {
@@ -109,12 +111,17 @@ public final class VirtualRoutedDispatch {
 				continue;
 			}
 
+			List<SourceRoute> contributors = new ArrayList<>();
+			for (SourceRoute source : sources)
+				if (matches(source.gauge(), item.stack))
+					contributors.add(source);
+			int scaler = requestScaler(gauge, contributors, item.count);
+
 			Map<String, Integer> weights = new LinkedHashMap<>();
-			for (SourceRoute source : sources) {
-				if (!matches(source.gauge(), item.stack))
-					continue;
+			for (SourceRoute source : contributors) {
 				int weight = gauge.mode == GaugeWorkMode.CRAFTING
-					? craftingWeights.getOrDefault(source, 0) : source.amount();
+					? craftingWeights.getOrDefault(source, 0)
+					: source.excludedFromMultiplier() ? source.amount() : source.amount() * scaler;
 				if (weight > 0)
 					weights.merge(source.address(), weight, Integer::sum);
 			}
@@ -140,6 +147,42 @@ public final class VirtualRoutedDispatch {
 			}
 		}
 		return buckets;
+	}
+
+	/**
+	 * Recovers the request multiplier Factory Controller applied to one merged item stack.
+	 *
+	 * <p>Since Factory Controller 1.2 a logistics link can be kept out of the request multiplier, so
+	 * the ordered count is {@code fixed + scalable * scaler} instead of a uniform multiple of the
+	 * link amounts. Weighting by the raw amounts would then under-serve the scaled addresses: two
+	 * links of amount 1, one of them excluded, at a scaler of 3 produce an order for 4 items that
+	 * belongs 1/3 to the two addresses, not 2/2.
+	 *
+	 * <p>Returns 1 — leaving the raw amounts in charge — whenever the reconstruction cannot be
+	 * trusted: in crafting mode, where every cell scales alike; when no link is excluded, so the
+	 * scaler cancels out of the ratio anyway; when a contributing source resolves ignore-data
+	 * variants, because it spreads one link's demand over several stacks and breaks the
+	 * one-link-per-stack assumption this arithmetic rests on; and when the result does not
+	 * reproduce the ordered count exactly.
+	 */
+	private static int requestScaler(VirtualGaugeBehaviour gauge, List<SourceRoute> contributors,
+		int orderedCount) {
+		if (gauge.mode == GaugeWorkMode.CRAFTING)
+			return 1;
+		long fixed = 0;
+		long scalable = 0;
+		for (SourceRoute source : contributors) {
+			if (source.gauge().ignoreData)
+				return 1;
+			if (source.excludedFromMultiplier())
+				fixed += source.amount();
+			else
+				scalable += source.amount();
+		}
+		if (fixed <= 0 || scalable <= 0)
+			return 1;
+		long scaler = (orderedCount - fixed) / scalable;
+		return scaler >= 1 && fixed + scaler * scalable == orderedCount ? (int) scaler : 1;
 	}
 
 	private static Map<String, List<BigItemStack>> splitCustom(VirtualGaugeBehaviour gauge,
@@ -216,6 +259,6 @@ public final class VirtualRoutedDispatch {
 	}
 
 	private record SourceRoute(VirtualComponentPosition position, VirtualGaugeBehaviour gauge,
-		int amount, String address) {
+		int amount, boolean excludedFromMultiplier, String address) {
 	}
 }

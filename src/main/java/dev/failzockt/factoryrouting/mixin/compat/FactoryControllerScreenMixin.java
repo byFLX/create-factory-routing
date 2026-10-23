@@ -23,7 +23,7 @@ import com.simibubi.create.foundation.gui.AllIcons;
 import io.github.nbcss.createfactorycontroller.content.GaugeWorkMode;
 import io.github.nbcss.createfactorycontroller.content.block.FactoryControllerMenu;
 import io.github.nbcss.createfactorycontroller.content.component.VirtualComponentPosition;
-import io.github.nbcss.createfactorycontroller.content.component.VirtualGaugeBehaviour;
+import io.github.nbcss.createfactorycontroller.content.component.gauge.VirtualGaugeBehaviour;
 import io.github.nbcss.createfactorycontroller.content.gui.screen.recipe.ConfigureRecipeScreen;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;

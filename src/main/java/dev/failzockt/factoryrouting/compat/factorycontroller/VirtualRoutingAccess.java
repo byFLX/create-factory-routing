@@ -1,6 +1,6 @@
 package dev.failzockt.factoryrouting.compat.factorycontroller;
 
-import io.github.nbcss.createfactorycontroller.content.component.VirtualGaugeBehaviour;
+import io.github.nbcss.createfactorycontroller.content.component.gauge.VirtualGaugeBehaviour;
 
 /** Safe access to the routing field mixed into Factory Controller's virtual gauges. */
 public final class VirtualRoutingAccess {

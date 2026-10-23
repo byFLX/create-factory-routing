@@ -1,6 +1,8 @@
 package dev.failzockt.factoryrouting.mixin.compat;
 
-import java.util.function.Function;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.function.UnaryOperator;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
@@ -22,7 +24,9 @@ import com.simibubi.create.content.logistics.stockTicker.PackageOrderWithCrafts;
 import io.github.nbcss.createfactorycontroller.content.block.FactoryControllerBlockEntity;
 import io.github.nbcss.createfactorycontroller.content.component.VirtualComponentBehaviour.NbtProfile;
 import io.github.nbcss.createfactorycontroller.content.component.VirtualComponentPosition;
-import io.github.nbcss.createfactorycontroller.content.component.VirtualGaugeBehaviour;
+import io.github.nbcss.createfactorycontroller.content.component.connection.Connection;
+import io.github.nbcss.createfactorycontroller.content.component.connection.LogisticsConnection;
+import io.github.nbcss.createfactorycontroller.content.component.gauge.VirtualGaugeBehaviour;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -30,7 +34,7 @@ import java.util.UUID;
 
 /** Persists and synchronises routing data with a Factory Controller virtual gauge. */
 @Pseudo
-@Mixin(targets = "io.github.nbcss.createfactorycontroller.content.component.VirtualGaugeBehaviour")
+@Mixin(targets = "io.github.nbcss.createfactorycontroller.content.component.gauge.VirtualGaugeBehaviour")
 public abstract class FactoryControllerGaugeMixin implements VirtualRoutingHolder {
 
 	@Unique
@@ -42,7 +46,14 @@ public abstract class FactoryControllerGaugeMixin implements VirtualRoutingHolde
 	@Override
 	public VirtualPanelRouting createFactoryRouting$getRouting() {
 		VirtualGaugeBehaviour gauge = (VirtualGaugeBehaviour) (Object) this;
-		createFactoryRouting$routing = createFactoryRouting$routing.prunedTo(gauge.targetedBy().keySet());
+		// Only logistics wires carry routing. Since Factory Controller 1.2 keys connections by type as
+		// well as by position, one source can target this gauge over several wires at once, so pruning
+		// against every incoming connection would keep the override of an ingredient whose logistics
+		// wire was pulled while, say, a redstone wire from the same position remained.
+		Set<VirtualComponentPosition> liveSources = new HashSet<>();
+		for (Connection incoming : gauge.incomingConnections(LogisticsConnection.TYPE))
+			liveSources.add(incoming.from);
+		createFactoryRouting$routing = createFactoryRouting$routing.prunedTo(liveSources);
 		return createFactoryRouting$routing;
 	}
 
@@ -99,9 +110,9 @@ public abstract class FactoryControllerGaugeMixin implements VirtualRoutingHolde
 			: VirtualPanelRouting.EMPTY;
 	}
 
-	@Inject(method = "remapRecipeSlots", at = @At("TAIL"))
+	@Inject(method = "onComponentsRelocated", at = @At("TAIL"))
 	private void createFactoryRouting$remapSources(
-		Function<VirtualComponentPosition, VirtualComponentPosition> remap, CallbackInfo ci) {
+		UnaryOperator<VirtualComponentPosition> remap, CallbackInfo ci) {
 		createFactoryRouting$routing = createFactoryRouting$routing.remapped(remap);
 	}
 }

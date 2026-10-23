@@ -73,13 +73,15 @@ dependencies {
 	compileOnly "dev.engine-room.flywheel:flywheel-neoforge-api-1.21.1:1.0.6"
 	runtimeOnly "dev.engine-room.flywheel:flywheel-neoforge-1.21.1:1.0.6"
 	runtimeOnly "dev.engine-room.vanillin:vanillin-neoforge-1.21.1:1.1.3-41"
-	compileOnly("curse.maven:create-factory-controller-1573767:8520194") {
+	// Create: Factory Controller 1.2.3 -- CurseForge file 9224923. The accepted range at runtime is
+	// declared in neoforge.mods.toml and is wider than this single compile target.
+	compileOnly("curse.maven:create-factory-controller-1573767:9224923") {
 		transitive = false
 	}
 	// Keep the development runtime switchable so the same addon jar is tested
 	// both with and without the optional compatibility mod installed.
 	if (!project.hasProperty('withoutFactoryController')) {
-		runtimeOnly("curse.maven:create-factory-controller-1573767:8520194") {
+		runtimeOnly("curse.maven:create-factory-controller-1573767:9224923") {
 			transitive = false
 		}
 	}

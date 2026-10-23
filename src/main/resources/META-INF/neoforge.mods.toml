@@ -38,9 +38,12 @@ side = "BOTH"
 [[dependencies.${mod_id}]]
 modId = "createfactorycontroller"
 type = "optional"
-# Pinned to the exact tested build. The mod reports itself as "1.1.1-neoforge-1.21.1", which the
-# loader orders above plain 1.1.1, so "[1.1.1]" would exclude it -- and an installed but
-# out-of-range optional dependency aborts loading rather than being skipped.
-versionRange = "[1.1.1-neoforge-1.21.1]"
+# Compiled against 1.2.3. 1.2.1 and 1.2.2 declare every member this addon mixes into with the same
+# signatures -- checked against the published jars -- so the range is closed over exactly those
+# three builds. 1.2.0 and older still use the pre-"component.gauge" package layout and do not work.
+# The mod reports itself as "1.2.3-neoforge-1.21.1", which the loader orders above plain 1.2.3, so
+# the bounds carry the full version strings -- and an installed but out-of-range optional
+# dependency aborts loading rather than being skipped.
+versionRange = "[1.2.1-neoforge-1.21.1,1.2.3-neoforge-1.21.1]"
 ordering = "AFTER"
 side = "BOTH"

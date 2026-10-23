@@ -7,8 +7,8 @@ import dev.failzockt.factoryrouting.FactoryRouting;
 import dev.failzockt.factoryrouting.routing.IngredientRoute;
 import io.github.nbcss.createfactorycontroller.content.block.FactoryControllerBlockEntity;
 import io.github.nbcss.createfactorycontroller.content.component.VirtualComponentPosition;
-import io.github.nbcss.createfactorycontroller.content.component.VirtualGaugeBehaviour;
 import io.github.nbcss.createfactorycontroller.content.component.connection.LogisticsConnection;
+import io.github.nbcss.createfactorycontroller.content.component.gauge.VirtualGaugeBehaviour;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -62,7 +62,7 @@ public final class FactoryControllerNetwork {
 			return null;
 		if (!(controller.components.get(gaugePos) instanceof VirtualGaugeBehaviour gauge))
 			return null;
-		if (!(gauge.targetedBy().get(sourcePos) instanceof LogisticsConnection))
+		if (!(gauge.incomingConnection(sourcePos, LogisticsConnection.TYPE) instanceof LogisticsConnection))
 			return null;
 		if (!(controller.components.get(sourcePos) instanceof VirtualGaugeBehaviour source))
 			return null;

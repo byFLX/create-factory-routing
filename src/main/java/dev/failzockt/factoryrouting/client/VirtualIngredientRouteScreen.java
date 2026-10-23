@@ -6,8 +6,8 @@ import dev.failzockt.factoryrouting.compat.factorycontroller.VirtualRoutingAcces
 import dev.failzockt.factoryrouting.routing.IngredientRoute;
 import io.github.nbcss.createfactorycontroller.content.block.FactoryControllerMenu;
 import io.github.nbcss.createfactorycontroller.content.component.VirtualComponentPosition;
-import io.github.nbcss.createfactorycontroller.content.component.VirtualGaugeBehaviour;
 import io.github.nbcss.createfactorycontroller.content.component.connection.LogisticsConnection;
+import io.github.nbcss.createfactorycontroller.content.component.gauge.VirtualGaugeBehaviour;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
@@ -52,7 +52,8 @@ public class VirtualIngredientRouteScreen extends AbstractIngredientRouteScreen 
 	@Override
 	protected int amount() {
 		VirtualGaugeBehaviour gauge = targetGauge();
-		return gauge != null && gauge.targetedBy().get(sourcePos) instanceof LogisticsConnection connection
+		return gauge != null && gauge.incomingConnection(sourcePos, LogisticsConnection.TYPE)
+			instanceof LogisticsConnection connection
 			? connection.amount() : 0;
 	}
 

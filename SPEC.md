@@ -21,15 +21,23 @@ additive and never replaces Create's own address field.
 | Minecraft | 1.21.1 |
 | NeoForge | 21.1.227 or newer |
 | Create | 6.0.10 — required and tested |
-| Create: Factory Controller | Optional, 1.1.1 — tested |
+| Create: Factory Controller | Optional, 1.2.1 to 1.2.3 — built against 1.2.3 |
 | Java | 21 |
 
-The compile target is `com.simibubi.create:create-1.21.1:6.0.10-281`. The published metadata pins
-both dependencies to exactly those versions rather than accepting newer ones: five Mixin classes
-with required injection points when their targets are present, plus the adapted dispatch logic,
-depend on specific method signatures, so a newer Create or Factory Controller has to be tested
-before a range is widened. Factory Controller is pinned as `[1.1.1-neoforge-1.21.1]`, the version
-string it actually reports.
+The compile target is `com.simibubi.create:create-1.21.1:6.0.10-281` and
+`curse.maven:create-factory-controller-1573767:9224923` (1.2.3). The published metadata keeps both
+dependencies on narrow ranges rather than accepting newer ones: five Mixin classes with required
+injection points when their targets are present, plus the adapted dispatch logic, depend on
+specific method signatures, so a newer Create or Factory Controller has to be checked before a
+range is widened.
+
+Factory Controller is declared as `[1.2.1-neoforge-1.21.1,1.2.3-neoforge-1.21.1]` — the version
+strings it actually reports, which the loader orders above the plain numbers. The range is closed
+over exactly the three builds whose published jars were compared member by member: 1.2.1, 1.2.2 and
+1.2.3 declare every field and method this addon shadows, injects into or calls with identical
+signatures, and `tickRequests` contains exactly one `LogisticsManager.findPackagersForRequest` call
+in each. 1.2.0 and older are excluded because they still use the pre-`component.gauge` package
+layout and the removed `targetedBy()` map.
 
 ## 3. Scope
 
@@ -214,6 +222,27 @@ The Mixin injection point for Create 6.0.10 was checked against the published by
 dispatch logic must be reviewed whenever support moves to a newer Create implementation that changes
 Factory Panel request processing.
 
+The same applies to Factory Controller. Its 1.2 line reworked the gauge API the compatibility layer
+builds on:
+
+- `content.component.VirtualGaugeBehaviour` and `content.component.RecipeSlot` moved to
+  `content.component.gauge`;
+- `targetedBy()` and `targeting()` were removed in favour of `incomingConnections()` and
+  `incomingConnection(position, type)`;
+- `remapRecipeSlots(Function)` became `onComponentsRelocated(UnaryOperator)`;
+- `ConnectionKey` gained a `type` component, so one source position can now reach the same gauge
+  over several wires at once. Anything that used to treat "targets this gauge" as a single
+  connection per position — route pruning in particular — has to filter by
+  `LogisticsConnection.TYPE` instead;
+- `LogisticsConnection.excludeFromRequestMultiplier` holds a link's amount out of the request
+  multiplier, so an ordered count is `fixed + scalable × scaler` and no longer proportional to the
+  raw link amounts. `VirtualRoutedDispatch.requestScaler` recovers the multiplier so the per-address
+  split follows what was ordered; see *Known gaps* in §11 for the one case it cannot solve.
+
+`VirtualGaugeBehaviour.buildOrderedSlots` still emits one entry per `recipeSlots` index with
+trailing gaps trimmed and the arrangement marker appended last, so the positional assumption
+`VirtualRoutedDispatch.splitCustom` makes continues to hold.
+
 ## 10. Diagnostic commands
 
 `/cfr route list` prints the active ingredient connections and their source positions. `/cfr route
@@ -232,7 +261,7 @@ address is refused instead of normalized.
 
 - Build on Java 21.
 - Start with Create 6.0.10 and without Factory Controller.
-- Start with Create 6.0.10 and Factory Controller 1.1.1.
+- Start with Create 6.0.10 and Factory Controller 1.2.3.
 - Confirm all required and optional Mixins apply in an audited development run.
 
 ### Regular panels
@@ -280,9 +309,29 @@ whose amounts are not bound by that clamp. Large controller recipes are therefor
 case. Until this is run, `packageCounter` continuity across packages of one order, the placement of
 the order context, and the final-link flag remain unobserved.
 
-The cases that have been exercised are unaffected: overrides and inheritance, two addresses in one
-cycle producing one correctly addressed package each, both trigger paths, sustained operation, and
-both gauge types.
+**Factory Controller 1.2.** The compatibility layer was migrated to the 1.2 gauge API by comparing
+the published 1.1.1, 1.2.1, 1.2.2 and 1.2.3 jars and reading Factory Controller's own 1.2.3 source
+for `tickRequests`. A first run with 1.2.3 installed works, but the checklist above has not been
+repeated on the 1.2 line, and only 1.2.3 itself was run — 1.2.1 and 1.2.2 rest on the signature
+comparison in §2.
+
+**Excluded links served by ignore-data sources.** `LogisticsConnection.excludeFromRequestMultiplier`
+keeps a link's amount out of the request multiplier, so `materializeDemand` ships
+`fixed + scalable × scaler` per item rather than a uniform multiple of the link amounts.
+`VirtualRoutedDispatch.requestScaler` recovers that multiplier from the ordered count —
+`scaler = (count - Σfixed) / Σscalable` — and `splitMerged` weights each link by what it actually
+contributed, so the mixed case now splits correctly.
+
+The reconstruction is refused, and the raw link amounts are used instead, when a contributing source
+has `ignoreData` set: such a source spreads one link's demand across several stock variants, so the
+ordered stacks no longer map one-to-one onto links and the equation has no unique solution. An
+ignore-data source *and* an excluded link feeding the same item to two addresses therefore still
+splits by raw amounts, which over-serves the excluded link's address. The total is conserved in
+every case. CUSTOM mode is unaffected throughout, because it keeps one order entry per recipe slot.
+
+The cases that have been exercised are unaffected on the regular Factory Panel path: overrides and
+inheritance, two addresses in one cycle producing one correctly addressed package each, both
+trigger paths, and sustained operation.
 
 ### Factory Controller
 
@@ -302,14 +351,30 @@ both gauge types.
 
 ## 12. Current status
 
-The project builds against Create `6.0.10-281`. Both dependency configurations build successfully,
-and the mod starts cleanly with and without Create: Factory Controller — without it, the three
-`@Pseudo` compatibility mixins are skipped with a warning and nothing else changes.
+The project builds against Create `6.0.10-281` and Factory Controller `1.2.3`. Both dependency
+configurations build successfully, and the mod starts cleanly with and without Create: Factory
+Controller — without it, the three `@Pseudo` compatibility mixins are skipped with a warning and
+nothing else changes.
 
 Exercised in game: per-ingredient overrides and inheritance, two addresses within one craft cycle
 producing exactly one correctly addressed package each, both trigger paths (manual crafting request
 and stock threshold), sustained operation across many consecutive cycles, persistence, the routing
-UI, and both the regular Factory Panel and a Factory Controller virtual gauge.
+UI, and both the regular Factory Panel and a Factory Controller virtual gauge. Those runs were on
+Factory Controller 1.1.1. The 1.2 compatibility layer has since been started and used once on
+1.2.3 without problems, but the checklist above has not been worked through again on that line.
+
+The persistence path on 1.2.3 was verified separately on a dedicated server holding a copy of a
+world with a configured controller. With the gauge's chunk force-loaded, `/data get block` returned
+
+```
+CreateFactoryRouting: {Routes: [{Address: "F2", X: -5, Y: -1}, {Address: "F1", X: -5, Y: 1}]}
+```
+
+for the gauge at board position (-3, 1), whose own `RecipeAddress` is `A`. That NBT is produced in
+memory by the `toNBT` injection, which calls `createFactoryRouting$getRouting()` and therefore the
+type-filtered pruning described in §9 — had `incomingConnections(LogisticsConnection.TYPE)` come
+back empty, `prunedTo` would have dropped both overrides and the tag would not appear at all. Load
+and save of routing data under 1.2.3 is thus confirmed; dispatch behaviour is not.
 
 The routing interface uses embedded side panels where space permits and compact screens at smaller
 resolutions without changing the routing data or dispatch contract described above.

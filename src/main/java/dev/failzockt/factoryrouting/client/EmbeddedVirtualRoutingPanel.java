@@ -8,8 +8,8 @@ import dev.failzockt.factoryrouting.compat.factorycontroller.VirtualRoutingAcces
 import dev.failzockt.factoryrouting.routing.IngredientRoute;
 import io.github.nbcss.createfactorycontroller.content.block.FactoryControllerMenu;
 import io.github.nbcss.createfactorycontroller.content.component.VirtualComponentPosition;
-import io.github.nbcss.createfactorycontroller.content.component.VirtualGaugeBehaviour;
 import io.github.nbcss.createfactorycontroller.content.component.connection.LogisticsConnection;
+import io.github.nbcss.createfactorycontroller.content.component.gauge.VirtualGaugeBehaviour;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 
@@ -41,7 +41,8 @@ public final class EmbeddedVirtualRoutingPanel extends AbstractEmbeddedRoutingPa
 	@Override
 	protected int amount(VirtualComponentPosition connection) {
 		VirtualGaugeBehaviour gauge = targetGauge();
-		return gauge != null && gauge.targetedBy().get(connection) instanceof LogisticsConnection logistics
+		return gauge != null && gauge.incomingConnection(connection, LogisticsConnection.TYPE)
+			instanceof LogisticsConnection logistics
 			? logistics.amount() : 0;
 	}
 
