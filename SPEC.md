@@ -39,6 +39,21 @@ signatures, and `tickRequests` contains exactly one `LogisticsManager.findPackag
 in each. 1.2.0 and older are excluded because they still use the pre-`component.gauge` package
 layout and the removed `targetedBy()` map.
 
+Excluding them is a hard stop rather than a silent skip, which is why the bounds are worth getting
+right. A development server started against Factory Controller 1.1.1 and again against 1.2.0
+refused to load both times:
+
+```
+net.neoforged.fml.ModLoadingException: Loading errors encountered:
+  - Mod create_factory_routing only supports createfactorycontroller between
+    1.2.1-neoforge-1.21.1 and 1.2.3-neoforge-1.21.1 (inclusive)
+    Currently, createfactorycontroller is 1.1.1-neoforge-1.21.1
+```
+
+An `optional` dependency means the mod may be absent, not that any version of it will do. Players
+who need Factory Controller 1.1.1 stay on Create: Factory Routing 0.1.0, which declares
+`[1.1.1-neoforge-1.21.1]`.
+
 ## 3. Scope
 
 Version 0.1 provides:
@@ -263,6 +278,8 @@ address is refused instead of normalized.
 - Start with Create 6.0.10 and without Factory Controller.
 - Start with Create 6.0.10 and Factory Controller 1.2.3.
 - Confirm all required and optional Mixins apply in an audited development run.
+- Confirm an out-of-range Factory Controller aborts loading with the range error rather than
+  starting without the integration — see §2. Checked against 1.1.1 and 1.2.0.
 
 ### Regular panels
 
